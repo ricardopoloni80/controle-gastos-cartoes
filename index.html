@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle de Gastos - Cartões</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <main class="app-shell">
+        <section class="hero-panel">
+            <div class="header">
+                <div class="title-block">
+                    <span class="eyebrow">Painel financeiro</span>
+                    <h1>Controle de Gastos - Cartões</h1>
+                    <p class="subtitle">Acompanhe despesas, parcelas e totais mensais em um único painel.</p>
+                </div>
+
+                <div class="ano-box">
+                    <span class="field-label">Ano de Referência</span>
+                    <select id="ano"></select>
+                </div>
+            </div>
+        </section>
+
+        <section class="surface-card months-panel">
+            <div class="section-heading">
+                <h2>Meses</h2>
+                <p>Selecione o período para visualizar ou lançar despesas.</p>
+            </div>
+            <div class="tabs" id="abasMeses"></div>
+        </section>
+
+        <section class="surface-card form-panel">
+            <div class="section-heading">
+                <h2>Novo lançamento</h2>
+                <p>Preencha os dados abaixo para distribuir as despesas automaticamente.</p>
+            </div>
+
+            <div class="card-form">
+                <input type="text" id="descricao" placeholder="Descrição">
+
+                <select id="cartao" required></select>
+
+                <select id="categoria" required></select>
+
+                <input type="number" id="valor" placeholder="Valor">
+
+                <input type="number" id="parcelas" placeholder="Nr. de Parcelas" min="1">
+
+                <button onclick="adicionarGasto()">Adicionar</button>
+            </div>
+        </section>
+
+        <section class="surface-card table-panel">
+            <div class="section-topbar">
+                <div class="section-heading">
+                    <h2>Lançamentos do mês</h2>
+                    <p>Visualize, filtre, edite e remova despesas registradas.</p>
+                </div>
+
+                <div class="total-card">
+                    <span class="total-label">Total do mês</span>
+                    <span class="total-value" id="total">R$ 0,00</span>
+                </div>
+            </div>
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>
+                                <div class="th-inner">
+                                    <span>Descrição</span>
+                                    <button type="button" class="filter-toggle" onclick="toggleFiltro('Descricao')" title="Filtrar descrição" aria-label="Filtrar descrição">
+                                        <span class="filter-icon" aria-hidden="true">
+                                            <span></span>
+                                            <span></span>
+                                            <span></span>
+                                        </span>
+                                    </button>
+                                    <div class="filter-popover" id="popoverDescricao">
+                                        <input type="text" id="filtroDescricao" placeholder="Filtrar por descrição">
+                                    </div>
+                                </div>
+                            </th>
+                            <th>
+                                <div class="th-inner">
+                                    <span>Cartão</span>
+                                    <button type="button" class="filter-toggle" onclick="toggleFiltro('Cartao')" title="Filtrar cartão" aria-label="Filtrar cartão">
+                                        <span class="filter-icon" aria-hidden="true">
+                                            <span></span>
+                                            <span></span>
+                                            <span></span>
+                                        </span>
+                                    </button>
+                                    <div class="filter-popover" id="popoverCartao">
+                                        <select id="filtroCartao"></select>
+                                    </div>
+                                </div>
+                            </th>
+                            <th>
+                                <div class="th-inner">
+                                    <span>Categoria</span>
+                                    <button type="button" class="filter-toggle" onclick="toggleFiltro('Categoria')" title="Filtrar categoria" aria-label="Filtrar categoria">
+                                        <span class="filter-icon" aria-hidden="true">
+                                            <span></span>
+                                            <span></span>
+                                            <span></span>
+                                        </span>
+                                    </button>
+                                    <div class="filter-popover" id="popoverCategoria">
+                                        <select id="filtroCategoria"></select>
+                                    </div>
+                                </div>
+                            </th>
+                            <th>
+                                <div class="th-inner">
+                                    <span>Valor</span>
+                                    <button type="button" class="filter-toggle" onclick="toggleFiltro('Valor')" title="Filtrar valor" aria-label="Filtrar valor">
+                                        <span class="filter-icon" aria-hidden="true">
+                                            <span></span>
+                                            <span></span>
+                                            <span></span>
+                                        </span>
+                                    </button>
+                                    <div class="filter-popover" id="popoverValor">
+                                        <input type="number" id="filtroValor" placeholder="Filtrar por valor" min="0" step="0.01">
+                                    </div>
+                                </div>
+                            </th>
+                            <th>Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody id="lista"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="surface-card chart-panel">
+            <div class="section-heading">
+                <h2>Gráfico de gastos por categoria</h2>
+                <p>Visualize rapidamente como os gastos do mês selecionado estão distribuídos entre as categorias.</p>
+            </div>
+
+            <div class="chart-card">
+                <div class="chart-area" id="graficoCategorias"></div>
+            </div>
+        </section>
+        <section class="surface-card pie-panel">
+            <div class="section-heading">
+                <h2>Gráficos anuais por cartão</h2>
+                <p>Confira os gastos acumulados do ano selecionado em cada cartão, distribuídos por categoria.</p>
+            </div>
+
+            <div class="pie-grid" id="graficosCartoesAno"></div>
+            <div class="pie-summary" id="graficoGeralCartoes"></div>
+        </section>
+    </main>
+
+    <script src="script.js"></script>
+</body>
+</html>
