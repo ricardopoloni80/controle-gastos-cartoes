@@ -124,7 +124,7 @@ function obterListaUnica(lista, tipo){
 
 function getCaminhoDadosUsuario(uid = usuarioLogado?.uid){
     if(!uid) throw new Error("Usuario nao autenticado.");
-    return `usuarios/${uid}/${FIREBASE_ROOT_PATH}`;
+    return `${FIREBASE_ROOT_PATH}/${uid}`;
 }
 
 function montarEstadoParaPersistencia(){
@@ -162,22 +162,11 @@ async function carregarEstadoInicial(){
 
     const caminhoUsuario = getCaminhoDadosUsuario();
     const snapshotUsuario = await db.ref(caminhoUsuario).once("value");
-    let estado = snapshotUsuario.val();
-
-    if(!estado){
-        const snapshotLegado = await db.ref(FIREBASE_ROOT_PATH).once("value");
-        const estadoLegado = snapshotLegado.val();
-
-        if(estadoLegado){
-            estado = estadoLegado;
-            aplicarEstadoRemoto(estadoLegado);
-            await db.ref(caminhoUsuario).set(montarEstadoParaPersistencia());
-        }
-    }
+    const estado = snapshotUsuario.val();
 
     aplicarEstadoRemoto(estado);
 
-    if(!estado || estado.listasVersao !== LISTAS_VERSAO_ATUAL){
+    if(estado && estado.listasVersao !== LISTAS_VERSAO_ATUAL){
         await salvarEstado();
     }
 }
@@ -197,7 +186,7 @@ function sincronizarListasComDados(){
 }
 
 function montarOpcoes(lista, placeholder, incluirNovo = false){
-    const placeholderHtml = `<option value="" selected disabled>${escapeHtml(placeholder)}</option>`;
+    const placeholderHtml = `<option value="" selected hidden>${escapeHtml(placeholder)}</option>`;
     const opcoesHtml = lista.map((item) => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`).join("");
     const opcaoNovoHtml = incluirNovo ? `<option value="${NOVO_ITEM_VALUE}">+ Cadastrar novo</option>` : "";
     return `${placeholderHtml}${opcoesHtml}${opcaoNovoHtml}`;
@@ -300,11 +289,13 @@ function inicializarSelectsDinamicos(){
 
 function carregarAnos(){
     const selectAno = document.getElementById("ano");
-    selectAno.innerHTML = "";
+    const opcoes = [];
 
     for(let ano = 2026; ano <= 2099; ano++){
-        selectAno.innerHTML += `<option value="${ano}">${ano}</option>`;
+        opcoes.push(`<option value="${ano}">${ano}</option>`);
     }
+
+    selectAno.innerHTML = opcoes.join("");
 
     selectAno.value = anoAtual;
     selectAno.addEventListener("change", (event) => {
@@ -826,6 +817,7 @@ async function inicializarApp(){
         garantirUIInicializada();
         sincronizarListasComDados();
         atualizarTela();
+        estadoPronto = true;
         window.alert("Nao foi possivel carregar os dados do Firebase. Verifique autenticacao, regras do banco e tente novamente.");
     }
 }
