@@ -6,6 +6,7 @@
     <title>Controle de Gastos - Cartões</title>
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
     <main class="app-shell">
         <section class="hero-panel">
@@ -158,6 +159,25 @@
         </section>
     </main>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyCs_ISX7R4iz8FlyMBcAUNxC9Pl25JpuVE",
+  authDomain: "controle-gastos-df6bc.firebaseapp.com",
+  databaseURL: "https://controle-gastos-df6bc-default-rtdb.firebaseio.com",
+  projectId: "controle-gastos-df6bc",
+  storageBucket: "controle-gastos-df6bc.firebasestorage.app",
+  messagingSenderId: "373686708291",
+  appId: "1:373686708291:web:f8a4096ec45cbeacfeccf6"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+</script>
+
     <script src="script.js"></script>
+
 </body>
 </html>

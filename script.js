@@ -1,9 +1,5 @@
 const meses = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
-const STORAGE_KEY = "controle-gastos-cartoes";
-const STORAGE_CARTOES_KEY = "controle-gastos-cartoes-cartoes";
-const STORAGE_CATEGORIAS_KEY = "controle-gastos-cartoes-categorias";
-const STORAGE_MES_KEY = "controle-gastos-cartoes-mes-atual";
-const STORAGE_LISTAS_VERSAO_KEY = "controle-gastos-cartoes-listas-versao";
+const FIREBASE_ROOT_PATH = "controle-gastos-cartoes";
 const NOVO_ITEM_VALUE = "__novo__";
 const LISTAS_VERSAO_ATUAL = "sem-padroes-2026-04-01";
 
@@ -12,12 +8,13 @@ const categoriasPadrao = [];
 const cartoesBloqueados = ["Nubank"];
 const categoriasBloqueadas = ["Laazer", "Outros"];
 
-let dados = carregarDados();
-let cartoes = carregarLista(STORAGE_CARTOES_KEY, cartoesPadrao, "cartao");
-let categorias = carregarLista(STORAGE_CATEGORIAS_KEY, categoriasPadrao, "categoria");
+let dados = {};
+let cartoes = obterListaUnica(cartoesPadrao, "cartao");
+let categorias = obterListaUnica(categoriasPadrao, "categoria");
 let anoAtual = definirAnoInicial();
-let mesAtual = carregarMesInicial();
+let mesAtual = new Date().getMonth();
 let editandoIndex = null;
+let estadoPronto = false;
 
 const filtros = {
     descricao: "",
@@ -51,11 +48,6 @@ const coresCartoes = [
     "#f97316",
     "#64748b"
 ];
-
-function carregarDados(){
-    const dadosSalvos = localStorage.getItem(STORAGE_KEY);
-    return dadosSalvos ? JSON.parse(dadosSalvos) : {};
-}
 
 function normalizarTexto(valor){
     return String(valor || "").toLowerCase().trim();
@@ -99,39 +91,6 @@ function itemBloqueado(tipo, valor){
     return listaBloqueada.some((item) => normalizarChaveLista(item) === normalizarChaveLista(valor));
 }
 
-function carregarLista(chave, listaPadrao, tipo){
-    const listaSalva = localStorage.getItem(chave);
-    if(!listaSalva) return obterListaUnica(listaPadrao, tipo);
-
-    try {
-        const itens = JSON.parse(listaSalva);
-        if(!Array.isArray(itens) || !itens.length) return obterListaUnica(listaPadrao, tipo);
-        return obterListaUnica([...listaPadrao, ...itens], tipo);
-    } catch {
-        return obterListaUnica(listaPadrao, tipo);
-    }
-}
-
-function resetarListasSeNecessario(){
-    const versaoSalva = localStorage.getItem(STORAGE_LISTAS_VERSAO_KEY);
-    if(versaoSalva === LISTAS_VERSAO_ATUAL) return;
-
-    cartoes = [];
-    categorias = [];
-    localStorage.removeItem(STORAGE_CARTOES_KEY);
-    localStorage.removeItem(STORAGE_CATEGORIAS_KEY);
-    localStorage.setItem(STORAGE_LISTAS_VERSAO_KEY, LISTAS_VERSAO_ATUAL);
-}
-
-function salvar(){
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(dados));
-}
-
-function salvarListas(){
-    localStorage.setItem(STORAGE_CARTOES_KEY, JSON.stringify(cartoes));
-    localStorage.setItem(STORAGE_CATEGORIAS_KEY, JSON.stringify(categorias));
-}
-
 function definirAnoInicial(){
     const anoDoSistema = new Date().getFullYear();
     if(anoDoSistema < 2026) return "2026";
@@ -139,14 +98,50 @@ function definirAnoInicial(){
     return String(anoDoSistema);
 }
 
-function carregarMesInicial(){
-    const mesSalvo = parseInt(localStorage.getItem(STORAGE_MES_KEY), 10);
-    if(Number.isInteger(mesSalvo) && mesSalvo >= 0 && mesSalvo <= 11) return mesSalvo;
+function normalizarMes(valor){
+    const mes = Number.parseInt(valor, 10);
+    if(Number.isInteger(mes) && mes >= 0 && mes <= 11) return mes;
     return new Date().getMonth();
 }
 
-function salvarMesAtual(){
-    localStorage.setItem(STORAGE_MES_KEY, String(mesAtual));
+function montarEstadoParaPersistencia(){
+    return {
+        dados,
+        cartoes,
+        categorias,
+        preferencias: {
+            mesAtual,
+            anoAtual
+        },
+        listasVersao: LISTAS_VERSAO_ATUAL
+    };
+}
+
+function aplicarEstadoRemoto(estado){
+    const listasResetadas = estado?.listasVersao !== LISTAS_VERSAO_ATUAL;
+    const cartoesRemotos = Array.isArray(estado?.cartoes) && !listasResetadas ? estado.cartoes : [];
+    const categoriasRemotas = Array.isArray(estado?.categorias) && !listasResetadas ? estado.categorias : [];
+
+    dados = estado?.dados && typeof estado.dados === "object" ? estado.dados : {};
+    cartoes = obterListaUnica([...cartoesPadrao, ...cartoesRemotos], "cartao");
+    categorias = obterListaUnica([...categoriasPadrao, ...categoriasRemotas], "categoria");
+    anoAtual = String(estado?.preferencias?.anoAtual || definirAnoInicial());
+    mesAtual = normalizarMes(estado?.preferencias?.mesAtual);
+}
+
+async function salvarEstado(){
+    await db.ref(FIREBASE_ROOT_PATH).set(montarEstadoParaPersistencia());
+}
+
+async function carregarEstadoInicial(){
+    const snapshot = await db.ref(FIREBASE_ROOT_PATH).once("value");
+    const estado = snapshot.val();
+
+    aplicarEstadoRemoto(estado);
+
+    if(!estado || estado.listasVersao !== LISTAS_VERSAO_ATUAL){
+        await salvarEstado();
+    }
 }
 
 function escapeHtml(valor){
@@ -176,7 +171,6 @@ function obterListaUnica(lista, tipo){
 function sincronizarListasComDados(){
     cartoes = obterListaUnica([...cartoesPadrao, ...cartoes], "cartao");
     categorias = obterListaUnica([...categoriasPadrao, ...categorias], "categoria");
-    salvarListas();
 }
 
 function montarOpcoes(lista, placeholder, incluirNovo = false){
@@ -216,7 +210,7 @@ function preencherSelectsFixos(){
     filtroCategoria.value = filtros.categoria;
 }
 
-function cadastrarNovoItem(tipo){
+async function cadastrarNovoItem(tipo){
     const configuracao = tipo === "cartao"
         ? {
             titulo: "cartão",
@@ -254,7 +248,7 @@ function cadastrarNovoItem(tipo){
         } else {
             categorias = obterListaUnica(configuracao.lista, "categoria");
         }
-        salvarListas();
+        await salvarEstado();
     }
 
     preencherSelectsFixos();
@@ -284,6 +278,9 @@ function carregarAnos(){
     selectAno.value = anoAtual;
     selectAno.addEventListener("change", (event) => {
         anoAtual = event.target.value;
+        salvarEstado().catch((error) => {
+            console.error("Erro ao salvar o ano atual no Firebase:", error);
+        });
         editandoIndex = null;
         atualizarTela();
     });
@@ -300,7 +297,9 @@ function criarAbas(){
         aba.textContent = mes;
         aba.onclick = () => {
             mesAtual = index;
-            salvarMesAtual();
+            salvarEstado().catch((error) => {
+                console.error("Erro ao salvar o mes atual no Firebase:", error);
+            });
             editandoIndex = null;
             atualizarTela();
         };
@@ -624,7 +623,7 @@ function renderizarGraficosPizzaAnuais(){
     containerResumo.innerHTML = montarCardPizza(graficoGeral, "summary-card", true);
 }
 
-function adicionarGasto(){
+async function adicionarGasto(){
     const descricao = document.getElementById("descricao").value.trim();
     const cartao = document.getElementById("cartao").value;
     const categoria = document.getElementById("categoria").value;
@@ -655,7 +654,7 @@ function adicionarGasto(){
         });
     }
 
-    salvar();
+    await salvarEstado();
     limparFormulario();
     atualizarTela();
 }
@@ -750,7 +749,7 @@ function cancelarEdicao(){
     atualizarTela();
 }
 
-function salvarEdicao(index){
+async function salvarEdicao(index){
     const descricao = document.getElementById("editDescricao").value.trim();
     const cartao = document.getElementById("editCartao").value;
     const categoria = document.getElementById("editCategoria").value;
@@ -765,12 +764,12 @@ function salvarEdicao(index){
         valor
     };
 
-    salvar();
+    await salvarEstado();
     editandoIndex = null;
     atualizarTela();
 }
 
-function remover(index){
+async function remover(index){
     if(!dados[anoAtual] || !dados[anoAtual][mesAtual]) return;
 
     dados[anoAtual][mesAtual].splice(index, 1);
@@ -780,13 +779,30 @@ function remover(index){
     }
 
     editandoIndex = null;
-    salvar();
+    await salvarEstado();
     atualizarTela();
 }
 
-resetarListasSeNecessario();
-sincronizarListasComDados();
-carregarAnos();
-inicializarSelectsDinamicos();
-inicializarFiltros();
-atualizarTela();
+async function inicializarApp(){
+    try {
+        await carregarEstadoInicial();
+        sincronizarListasComDados();
+        carregarAnos();
+        inicializarSelectsDinamicos();
+        inicializarFiltros();
+        atualizarTela();
+        estadoPronto = true;
+    } catch (error) {
+        console.error("Erro ao carregar dados do Firebase:", error);
+        window.alert("Nao foi possivel carregar os dados do Firebase. Verifique a configuracao e tente novamente.");
+    }
+}
+
+db.ref(FIREBASE_ROOT_PATH).on("value", (snapshot) => {
+    if(!estadoPronto) return;
+
+    aplicarEstadoRemoto(snapshot.val());
+    atualizarTela();
+});
+
+inicializarApp();
