@@ -15,9 +15,9 @@ let anoAtual = definirAnoInicial();
 let mesAtual = new Date().getMonth();
 let editandoIndex = null;
 let estadoPronto = false;
+
 let usuarioLogado = null;
-let appInicializado = false;
-let unsubscribeDados = null;
+
 
 const filtros = {
     descricao: "",
@@ -107,11 +107,6 @@ function normalizarMes(valor){
     return new Date().getMonth();
 }
 
-function getCaminhoDadosUsuario(uid = usuarioLogado?.uid){
-    if(!uid) throw new Error("Usuario nao autenticado.");
-    return `usuarios/${uid}/${FIREBASE_ROOT_PATH}`;
-}
-
 function montarEstadoParaPersistencia(){
     return {
         dados,
@@ -138,26 +133,12 @@ function aplicarEstadoRemoto(estado){
 }
 
 async function salvarEstado(){
-    if(!usuarioLogado) throw new Error("Usuario nao autenticado.");
-    await db.ref(getCaminhoDadosUsuario()).set(montarEstadoParaPersistencia());
+    await db.ref(FIREBASE_ROOT_PATH).set(montarEstadoParaPersistencia());
 }
 
 async function carregarEstadoInicial(){
-    if(!usuarioLogado) throw new Error("Usuario nao autenticado.");
-    const caminhoUsuario = getCaminhoDadosUsuario();
-    const snapshotUsuario = await db.ref(caminhoUsuario).once("value");
-    let estado = snapshotUsuario.val();
-
-    if(!estado){
-        const snapshotLegado = await db.ref(FIREBASE_ROOT_PATH).once("value");
-        const estadoLegado = snapshotLegado.val();
-
-        if(estadoLegado){
-            estado = estadoLegado;
-            aplicarEstadoRemoto(estadoLegado);
-            await db.ref(caminhoUsuario).set(montarEstadoParaPersistencia());
-        }
-    }
+    const snapshot = await db.ref(FIREBASE_ROOT_PATH).once("value");
+    const estado = snapshot.val();
 
     aplicarEstadoRemoto(estado);
 
@@ -748,7 +729,7 @@ function atualizarTela(){
                 <td colspan="5">Nenhum lançamento encontrado para os filtros informados.</td>
             </tr>
         `;
-    }
+    } else {
         lancamentosFiltrados.forEach((gasto) => {
             lista.innerHTML += gasto.originalIndex === editandoIndex
                 ? renderLinhaEdicao(gasto)
@@ -809,90 +790,33 @@ async function inicializarApp(){
     try {
         await carregarEstadoInicial();
         sincronizarListasComDados();
-        if(!appInicializado){
-            carregarAnos();
-            inicializarSelectsDinamicos();
-            inicializarFiltros();
-            appInicializado = true;
-        }
+        carregarAnos();
+        inicializarSelectsDinamicos();
+        inicializarFiltros();
         atualizarTela();
         estadoPronto = true;
     } catch (error) {
         console.error("Erro ao carregar dados do Firebase:", error);
-        window.alert("Nao foi possivel carregar os dados do Firebase. Verifique autenticacao, regras do banco e tente novamente.");
-    }
-}
-
-
-// 🔐 Controle de autenticação
-function assinarDadosUsuario(){
-    if(!usuarioLogado) return;
-
-    if(typeof unsubscribeDados === "function"){
-        unsubscribeDados();
-    }
-
-    const refDados = db.ref(getCaminhoDadosUsuario());
-    const listener = (snapshot) => {
-        if(!estadoPronto) return;
-
-        aplicarEstadoRemoto(snapshot.val());
-        atualizarTela();
-    };
-
-    refDados.on("value", listener);
-    unsubscribeDados = () => refDados.off("value", listener);
-}
-
-async function autenticarComGoogle(){
-    const provider = new firebase.auth.GoogleAuthProvider();
-    provider.setCustomParameters({ prompt: "select_account" });
-
-    try {
-        await firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);
-    } catch (error) {
-        console.warn("Nao foi possivel definir a persistencia local da autenticacao:", error);
-    }
-
-    try {
-        await firebase.auth().signInWithPopup(provider);
-    } catch (error) {
-        const deveUsarRedirect = [
-            "auth/popup-blocked",
-            "auth/popup-closed-by-user",
-            "auth/cancelled-popup-request",
-            "auth/operation-not-supported-in-this-environment"
-        ].includes(error?.code);
-
-        if(deveUsarRedirect){
-            await firebase.auth().signInWithRedirect(provider);
-            return;
-        }
-
-        console.error("Erro ao autenticar com Google:", error);
-        window.alert("Nao foi possivel entrar com Google. Verifique se o provedor Google esta habilitado no Firebase Auth.");
+        window.alert("Nao foi possivel carregar os dados do Firebase. Verifique a configuracao e tente novamente.");
     }
 }
 
 firebase.auth().onAuthStateChanged(async (user) => {
-    if(user) {
+    if (user) {
         usuarioLogado = user;
 
-        // Carrega dados do usuário logado
         await inicializarApp();
-        assinarDadosUsuario();
-        return;
+
+        // 🔥 Listener só depois de autenticado
+        db.ref(FIREBASE_ROOT_PATH).on("value", (snapshot) => {
+            if(!estadoPronto) return;
+
+            aplicarEstadoRemoto(snapshot.val());
+            atualizarTela();
+        });
 
     } else {
-        // Se não estiver logado → força login
-        usuarioLogado = null;
-        estadoPronto = false;
-
-        if(typeof unsubscribeDados === "function"){
-            unsubscribeDados();
-            unsubscribeDados = null;
-        }
-
-        await autenticarComGoogle();
+        const provider = new firebase.auth.GoogleAuthProvider();
+        firebase.auth().signInWithPopup(provider);
     }
 });
