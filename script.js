@@ -1034,6 +1034,11 @@ async function concluirRedirectAutenticacao(){
 async function processarUsuarioAutenticado(user){
     if(!user) return;
 
+    if(usuarioLogado?.uid === user.uid && estadoPronto) {
+        atualizarVisibilidadeTelas();
+        return;
+    }
+
     autenticacaoManualPendente = false;
     limparRedirectEmAndamento();
     usuarioLogado = user;
@@ -1055,32 +1060,74 @@ function processarUsuarioDeslogado(){
     atualizarSaudacaoUsuario();
 }
 
-firebase.auth().onAuthStateChanged(async (user) => {
-    if(user) {
-        await processarUsuarioAutenticado(user);
-        return;
-    }
+function aguardarPrimeiroEstadoAuth(timeoutMs = 4000){
+    return new Promise((resolve) => {
+        const auth = firebase.auth();
+        let resolvido = false;
+        let unsubscribe = null;
 
-    processarUsuarioDeslogado();
-});
+        const finalizar = (user) => {
+            if(resolvido) return;
+            resolvido = true;
+            if(typeof unsubscribe === "function") unsubscribe();
+            resolve(user || null);
+        };
 
-if(redirectEmAndamento()){
-    const authShell = document.getElementById("authShell");
-    if(authShell){
-        authShell.classList.remove("is-hidden");
-    }
+        unsubscribe = auth.onAuthStateChanged((user) => {
+            finalizar(user);
+        });
+
+        window.setTimeout(() => {
+            finalizar(auth.currentUser);
+        }, timeoutMs);
+    });
 }
 
-garantirUIInicializada();
+async function inicializarAutenticacao(){
+    garantirUIInicializada();
 
-concluirRedirectAutenticacao()
-    .then(async (user) => {
-        if(user){
-            await processarUsuarioAutenticado(user);
+    if(redirectEmAndamento()){
+        const authShell = document.getElementById("authShell");
+        if(authShell){
+            authShell.classList.remove("is-hidden");
         }
-    })
-    .catch((error) => {
+    }
+
+    let usuarioInicial = null;
+
+    try {
+        usuarioInicial = await concluirRedirectAutenticacao();
+    } catch (error) {
         console.error("Erro inesperado ao processar retorno do Google:", error);
+    }
+
+    if(!usuarioInicial){
+        usuarioInicial = firebase.auth().currentUser;
+    }
+
+    if(!usuarioInicial){
+        usuarioInicial = await aguardarPrimeiroEstadoAuth();
+    }
+
+    if(usuarioInicial){
+        await processarUsuarioAutenticado(usuarioInicial);
+    } else {
+        processarUsuarioDeslogado();
+    }
+
+    firebase.auth().onAuthStateChanged(async (user) => {
+        if(user) {
+            await processarUsuarioAutenticado(user);
+            return;
+        }
+
+        processarUsuarioDeslogado();
     });
+}
+
+inicializarAutenticacao().catch((error) => {
+    console.error("Erro ao inicializar autenticação:", error);
+    processarUsuarioDeslogado();
+});
 
 
