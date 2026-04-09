@@ -1,4 +1,4 @@
-const meses = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
+﻿const meses = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
 const FIREBASE_ROOT_PATH = "controle-gastos-cartoes";
 const NOVO_ITEM_VALUE = "__novo__";
 const LISTAS_VERSAO_ATUAL = "sem-padroes-2026-04-01";
@@ -18,6 +18,7 @@ let estadoPronto = false;
 let usuarioLogado = null;
 let appInicializado = false;
 let unsubscribeDados = null;
+let autenticacaoManualPendente = false;
 
 const filtros = {
     descricao: "",
@@ -123,7 +124,7 @@ function obterListaUnica(lista, tipo){
 }
 
 function getCaminhoDadosUsuario(uid = usuarioLogado?.uid){
-    if(!uid) throw new Error("Usuario nao autenticado.");
+    if(!uid) throw new Error("Usuário não autenticado.");
     return `${FIREBASE_ROOT_PATH}/${uid}`;
 }
 
@@ -153,12 +154,12 @@ function aplicarEstadoRemoto(estado){
 }
 
 async function salvarEstado(){
-    if(!usuarioLogado) throw new Error("Usuario nao autenticado.");
+    if(!usuarioLogado) throw new Error("Usuário não autenticado.");
     await db.ref(getCaminhoDadosUsuario()).set(montarEstadoParaPersistencia());
 }
 
 async function carregarEstadoInicial(){
-    if(!usuarioLogado) throw new Error("Usuario nao autenticado.");
+    if(!usuarioLogado) throw new Error("Usuário não autenticado.");
 
     const caminhoUsuario = getCaminhoDadosUsuario();
     const snapshotUsuario = await db.ref(caminhoUsuario).once("value");
@@ -178,6 +179,102 @@ function escapeHtml(valor){
         .replaceAll(">", "&gt;")
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#39;");
+}
+
+function obterNomeUsuario(){
+    const nome = usuarioLogado?.displayName || usuarioLogado?.email || "";
+    return String(nome).trim();
+}
+
+function fecharMenuUsuario(){
+    const menu = document.getElementById("menuUsuario");
+    const botao = document.getElementById("botaoUsuario");
+    if(menu) menu.classList.remove("is-open");
+    if(botao) botao.setAttribute("aria-expanded", "false");
+}
+
+function toggleMenuUsuario(){
+    const menu = document.getElementById("menuUsuario");
+    const botao = document.getElementById("botaoUsuario");
+    if(!menu || !botao) return;
+
+    const vaiAbrir = !menu.classList.contains("is-open");
+    fecharMenuUsuario();
+
+    if(vaiAbrir){
+        menu.classList.add("is-open");
+        botao.setAttribute("aria-expanded", "true");
+    }
+}
+
+async function sairDoSistema(){
+    autenticacaoManualPendente = true;
+    fecharMenuUsuario();
+
+    try {
+        await firebase.auth().signOut();
+    } catch (error) {
+        autenticacaoManualPendente = false;
+        console.error("Erro ao sair do sistema:", error);
+        window.alert("Não foi possível sair do sistema. Tente novamente.");
+    }
+}
+
+function atualizarSaudacaoUsuario(){
+    const container = document.getElementById("saudacaoUsuario");
+    if(!container) return;
+
+    if(usuarioLogado){
+        const nomeUsuario = escapeHtml(obterNomeUsuario() || "usuário");
+        container.innerHTML = `
+            <button
+                type="button"
+                class="user-name-trigger"
+                id="botaoUsuario"
+                aria-haspopup="true"
+                aria-expanded="false"
+                aria-controls="menuUsuario"
+            >
+                <span class="user-greeting-text">Olá, ${nomeUsuario}</span>
+                <svg class="logout-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path fill="currentColor" d="M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h5v-2H5V5h5V3zm5.59 4.59L14.17 9l2.59 2.5H8v2h8.76l-2.59 2.5 1.42 1.41L21 12l-5.41-5.41z"></path>
+                    <path fill="currentColor" d="M19 5h-6v2h6v10h-6v2h6a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z" opacity=".35"></path>
+                </svg>
+            </button>
+            <div class="user-menu" id="menuUsuario" role="menu">
+                <span class="user-menu-label">Conta</span>
+                <button type="button" class="user-menu-action" id="botaoSair" role="menuitem">Sair do sistema</button>
+            </div>
+        `;
+
+        document.getElementById("botaoUsuario")?.addEventListener("click", (event) => {
+            event.stopPropagation();
+            toggleMenuUsuario();
+        });
+
+        document.getElementById("menuUsuario")?.addEventListener("click", (event) => {
+            event.stopPropagation();
+        });
+
+        document.getElementById("botaoSair")?.addEventListener("click", () => {
+            sairDoSistema().catch((error) => {
+                console.error("Erro ao finalizar logout:", error);
+            });
+        });
+
+        return;
+    }
+
+    container.innerHTML = `
+        <button type="button" class="user-login-button" id="botaoEntrarGoogle">Entrar com Google</button>
+    `;
+
+    document.getElementById("botaoEntrarGoogle")?.addEventListener("click", () => {
+        autenticacaoManualPendente = false;
+        autenticarComGoogle().catch((error) => {
+            console.error("Erro ao iniciar login manual:", error);
+        });
+    });
 }
 
 function sincronizarListasComDados(){
@@ -273,7 +370,7 @@ function inicializarSelectsDinamicos(){
     document.getElementById("cartao").addEventListener("change", (event) => {
         if(event.target.value === NOVO_ITEM_VALUE) {
             cadastrarNovoItem("cartao").catch((error) => {
-                console.error("Erro ao cadastrar cartao:", error);
+                console.error("Erro ao cadastrar cartão:", error);
             });
         }
     });
@@ -320,7 +417,7 @@ function criarAbas(){
         aba.onclick = () => {
             mesAtual = index;
             salvarEstado().catch((error) => {
-                console.error("Erro ao salvar o mes atual no Firebase:", error);
+                console.error("Erro ao salvar o mês atual no Firebase:", error);
             });
             editandoIndex = null;
             atualizarTela();
@@ -357,6 +454,18 @@ function inicializarFiltros(){
     document.addEventListener("click", (event) => {
         if(event.target.closest(".filter-popover") || event.target.closest(".filter-toggle")) return;
         fecharFiltros();
+    });
+
+    document.addEventListener("click", (event) => {
+        if(event.target.closest("#saudacaoUsuario")) return;
+        fecharMenuUsuario();
+    });
+
+    document.addEventListener("keydown", (event) => {
+        if(event.key === "Escape") {
+            fecharFiltros();
+            fecharMenuUsuario();
+        }
     });
 }
 
@@ -734,6 +843,7 @@ function renderLinhaVisual(gasto){
 function atualizarTela(){
     criarAbas();
     preencherSelectsFixos();
+    atualizarSaudacaoUsuario();
 
     const lista = document.getElementById("lista");
     lista.innerHTML = "";
@@ -818,7 +928,7 @@ async function inicializarApp(){
         sincronizarListasComDados();
         atualizarTela();
         estadoPronto = true;
-        window.alert("Nao foi possivel carregar os dados do Firebase. Verifique autenticacao, regras do banco e tente novamente.");
+        window.alert("Não foi possível carregar os dados do Firebase. Verifique autenticação, regras do banco e tente novamente.");
     }
 }
 
@@ -858,7 +968,7 @@ async function autenticarComGoogle(){
     try {
         await firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);
     } catch (error) {
-        console.warn("Nao foi possivel definir a persistencia local da autenticacao:", error);
+        console.warn("Não foi possível definir a persistência local da autenticação:", error);
     }
 
     try {
@@ -877,12 +987,13 @@ async function autenticarComGoogle(){
         }
 
         console.error("Erro ao autenticar com Google:", error);
-        window.alert("Nao foi possivel entrar com Google. Verifique se o provedor Google esta habilitado no Firebase Auth.");
+        window.alert("Não foi possível entrar com Google. Verifique se o provedor Google está habilitado no Firebase Auth.");
     }
 }
 
 firebase.auth().onAuthStateChanged(async (user) => {
     if(user) {
+        autenticacaoManualPendente = false;
         usuarioLogado = user;
         await inicializarApp();
         assinarDadosUsuario();
@@ -897,7 +1008,15 @@ firebase.auth().onAuthStateChanged(async (user) => {
         unsubscribeDados = null;
     }
 
+    atualizarSaudacaoUsuario();
+
+    if(autenticacaoManualPendente){
+        return;
+    }
+
     await autenticarComGoogle();
 });
 
 garantirUIInicializada();
+
+

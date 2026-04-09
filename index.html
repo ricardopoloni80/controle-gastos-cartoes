@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Controle de Gastos - Cartões</title>
+    <title>Controle de Gastos - Cart&otilde;es</title>
     <link rel="stylesheet" href="style.css">
 </head>
 
@@ -13,13 +13,17 @@
             <div class="header">
                 <div class="title-block">
                     <span class="eyebrow">Painel financeiro</span>
-                    <h1>Controle de Gastos - Cartões</h1>
-                    <p class="subtitle">Acompanhe despesas, parcelas e totais mensais em um único painel.</p>
+                    <h1>Controle de Gastos - Cart&otilde;es</h1>
+                    <p class="subtitle">Acompanhe despesas, parcelas e totais mensais em um &uacute;nico painel.</p>
                 </div>
 
-                <div class="ano-box">
-                    <span class="field-label">Ano de Referência</span>
-                    <select id="ano"></select>
+                <div class="header-side">
+                    <div class="user-greeting" id="saudacaoUsuario"></div>
+
+                    <div class="ano-box">
+                        <span class="field-label">Ano de Refer&ecirc;ncia</span>
+                        <select id="ano"></select>
+                    </div>
                 </div>
             </div>
         </section>
@@ -27,19 +31,19 @@
         <section class="surface-card months-panel">
             <div class="section-heading">
                 <h2>Meses</h2>
-                <p>Selecione o período para visualizar ou lançar despesas.</p>
+                <p>Selecione o per&iacute;odo para visualizar ou lan&ccedil;ar despesas.</p>
             </div>
             <div class="tabs" id="abasMeses"></div>
         </section>
 
         <section class="surface-card form-panel">
             <div class="section-heading">
-                <h2>Novo lançamento</h2>
+                <h2>Novo lan&ccedil;amento</h2>
                 <p>Preencha os dados abaixo para distribuir as despesas automaticamente.</p>
             </div>
 
             <div class="card-form">
-                <input type="text" id="descricao" placeholder="Descrição">
+                <input type="text" id="descricao" placeholder="Descri&ccedil;&atilde;o">
 
                 <select id="cartao" required></select>
 
@@ -56,12 +60,12 @@
         <section class="surface-card table-panel">
             <div class="section-topbar">
                 <div class="section-heading">
-                    <h2>Lançamentos do mês</h2>
+                    <h2>Lan&ccedil;amentos do m&ecirc;s</h2>
                     <p>Visualize, filtre, edite e remova despesas registradas.</p>
                 </div>
 
                 <div class="total-card">
-                    <span class="total-label">Total do mês</span>
+                    <span class="total-label">Total do m&ecirc;s</span>
                     <span class="total-value" id="total">R$ 0,00</span>
                 </div>
             </div>
@@ -72,8 +76,8 @@
                         <tr>
                             <th>
                                 <div class="th-inner">
-                                    <span>Descrição</span>
-                                    <button type="button" class="filter-toggle" onclick="toggleFiltro('Descricao')" title="Filtrar descrição" aria-label="Filtrar descrição">
+                                    <span>Descri&ccedil;&atilde;o</span>
+                                    <button type="button" class="filter-toggle" onclick="toggleFiltro('Descricao')" title="Filtrar descri&ccedil;&atilde;o" aria-label="Filtrar descri&ccedil;&atilde;o">
                                         <span class="filter-icon" aria-hidden="true">
                                             <span></span>
                                             <span></span>
@@ -81,14 +85,14 @@
                                         </span>
                                     </button>
                                     <div class="filter-popover" id="popoverDescricao">
-                                        <input type="text" id="filtroDescricao" placeholder="Filtrar por descrição">
+                                        <input type="text" id="filtroDescricao" placeholder="Filtrar por descri&ccedil;&atilde;o">
                                     </div>
                                 </div>
                             </th>
                             <th>
                                 <div class="th-inner">
-                                    <span>Cartão</span>
-                                    <button type="button" class="filter-toggle" onclick="toggleFiltro('Cartao')" title="Filtrar cartão" aria-label="Filtrar cartão">
+                                    <span>Cart&atilde;o</span>
+                                    <button type="button" class="filter-toggle" onclick="toggleFiltro('Cartao')" title="Filtrar cart&atilde;o" aria-label="Filtrar cart&atilde;o">
                                         <span class="filter-icon" aria-hidden="true">
                                             <span></span>
                                             <span></span>
@@ -130,7 +134,7 @@
                                     </div>
                                 </div>
                             </th>
-                            <th>Ação</th>
+                            <th>A&ccedil;&atilde;o</th>
                         </tr>
                     </thead>
                     <tbody id="lista"></tbody>
@@ -140,18 +144,19 @@
 
         <section class="surface-card chart-panel">
             <div class="section-heading">
-                <h2>Gráfico de gastos por categoria</h2>
-                <p>Visualize rapidamente como os gastos do mês selecionado estão distribuídos entre as categorias.</p>
+                <h2>Gr&aacute;fico de gastos por categoria</h2>
+                <p>Visualize rapidamente como os gastos do m&ecirc;s selecionado est&atilde;o distribu&iacute;dos entre as categorias.</p>
             </div>
 
             <div class="chart-card">
                 <div class="chart-area" id="graficoCategorias"></div>
             </div>
         </section>
+
         <section class="surface-card pie-panel">
             <div class="section-heading">
-                <h2>Gráficos anuais por cartão</h2>
-                <p>Confira os gastos acumulados do ano selecionado em cada cartão, distribuídos por categoria.</p>
+                <h2>Gr&aacute;ficos anuais por cart&atilde;o</h2>
+                <p>Confira os gastos acumulados do ano selecionado em cada cart&atilde;o, distribu&iacute;dos por categoria.</p>
             </div>
 
             <div class="pie-grid" id="graficosCartoesAno"></div>
@@ -159,26 +164,25 @@
         </section>
     </main>
 
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 
-<script>
-const firebaseConfig = {
-  apiKey: "AIzaSyCs_ISX7R4iz8FlyMBcAUNxC9Pl25JpuVE",
-  authDomain: "controle-gastos-df6bc.firebaseapp.com",
-  databaseURL: "https://controle-gastos-df6bc-default-rtdb.firebaseio.com",
-  projectId: "controle-gastos-df6bc",
-  storageBucket: "controle-gastos-df6bc.firebasestorage.app",
-  messagingSenderId: "373686708291",
-  appId: "1:373686708291:web:f8a4096ec45cbeacfeccf6"
-};
+    <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyCs_ISX7R4iz8FlyMBcAUNxC9Pl25JpuVE",
+      authDomain: "controle-gastos-df6bc.firebaseapp.com",
+      databaseURL: "https://controle-gastos-df6bc-default-rtdb.firebaseio.com",
+      projectId: "controle-gastos-df6bc",
+      storageBucket: "controle-gastos-df6bc.firebasestorage.app",
+      messagingSenderId: "373686708291",
+      appId: "1:373686708291:web:f8a4096ec45cbeacfeccf6"
+    };
 
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
-</script>
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    </script>
 
     <script src="script.js"></script>
-
 </body>
 </html>

@@ -98,6 +98,14 @@ body::before {
     max-width: 640px;
 }
 
+.header-side {
+    display: grid;
+    justify-items: end;
+    align-content: start;
+    gap: 14px;
+    min-width: 250px;
+}
+
 .eyebrow {
     display: inline-flex;
     align-items: center;
@@ -130,6 +138,104 @@ h1 {
     color: rgba(255, 255, 255, 0.82);
     font-size: 1rem;
     line-height: 1.55;
+}
+
+.user-greeting {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    color: rgba(255, 255, 255, 0.92);
+    font-size: 0.98rem;
+    text-align: right;
+}
+
+.user-greeting-text {
+    color: inherit;
+    white-space: nowrap;
+}
+
+.user-name-trigger,
+.user-login-button,
+.user-menu-action {
+    border: 0;
+    cursor: pointer;
+    font: inherit;
+}
+
+.user-name-trigger,
+.user-login-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    gap: 10px;
+    padding: 0 16px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.18);
+    color: #ffffff;
+    font-weight: 700;
+    box-shadow: none;
+    transition: background 0.18s ease, transform 0.18s ease;
+}
+
+.user-name-trigger:hover,
+.user-login-button:hover {
+    background: rgba(255, 255, 255, 0.26);
+    transform: translateY(-1px);
+}
+
+.user-menu {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    z-index: 20;
+    display: none;
+    min-width: 210px;
+    padding: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.98);
+    box-shadow: var(--shadow-md);
+}
+
+.user-menu.is-open {
+    display: grid;
+    gap: 6px;
+}
+
+.user-menu-label {
+    padding: 6px 8px 2px;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.user-menu-action {
+    width: 100%;
+    min-height: 42px;
+    padding: 0 12px;
+    border-radius: 12px;
+    background: #f8fafc;
+    color: var(--text-main);
+    font-weight: 700;
+    text-align: left;
+    transition: background 0.18s ease;
+}
+
+.user-menu-action:hover {
+    background: #eef2ff;
+}
+
+.logout-icon {
+    width: 18px;
+    height: 18px;
+    display: inline-block;
+    color: currentColor;
+    flex: 0 0 auto;
 }
 
 .ano-box,
@@ -831,9 +937,25 @@ tbody tr:hover td {
         align-items: stretch;
     }
 
+    .header-side {
+        justify-items: stretch;
+        min-width: 100%;
+    }
+
     .ano-box,
     .total-card {
         min-width: 100%;
+    }
+
+    .user-greeting {
+        width: 100%;
+        justify-content: space-between;
+        text-align: left;
+    }
+
+    .user-menu {
+        left: 0;
+        right: auto;
     }
 
     .card-form {
