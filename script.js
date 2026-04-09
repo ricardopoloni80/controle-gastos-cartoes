@@ -2,6 +2,7 @@
 const FIREBASE_ROOT_PATH = "controle-gastos-cartoes";
 const NOVO_ITEM_VALUE = "__novo__";
 const LISTAS_VERSAO_ATUAL = "sem-padroes-2026-04-01";
+const AUTH_REDIRECT_KEY = "controle-gastos-cartoes:auth-redirect";
 
 const cartoesPadrao = [];
 const categoriasPadrao = [];
@@ -184,6 +185,31 @@ function escapeHtml(valor){
 function obterNomeUsuario(){
     const nome = usuarioLogado?.displayName || usuarioLogado?.email || "";
     return String(nome).trim();
+}
+
+function marcarRedirectEmAndamento(){
+    try {
+        sessionStorage.setItem(AUTH_REDIRECT_KEY, "1");
+    } catch (error) {
+        console.warn("Não foi possível registrar o redirect de autenticação:", error);
+    }
+}
+
+function limparRedirectEmAndamento(){
+    try {
+        sessionStorage.removeItem(AUTH_REDIRECT_KEY);
+    } catch (error) {
+        console.warn("Não foi possível limpar o estado do redirect de autenticação:", error);
+    }
+}
+
+function redirectEmAndamento(){
+    try {
+        return sessionStorage.getItem(AUTH_REDIRECT_KEY) === "1";
+    } catch (error) {
+        console.warn("Não foi possível consultar o estado do redirect de autenticação:", error);
+        return false;
+    }
 }
 
 function atualizarVisibilidadeTelas(){
@@ -983,16 +1009,32 @@ async function autenticarComGoogle(){
     }
 
     try {
+        marcarRedirectEmAndamento();
         await firebase.auth().signInWithRedirect(provider);
     } catch (error) {
+        limparRedirectEmAndamento();
         console.error("Erro ao autenticar com Google:", error);
         window.alert("Não foi possível entrar com Google. Verifique se o provedor Google está habilitado no Firebase Auth.");
+    }
+}
+
+async function concluirRedirectAutenticacao(){
+    try {
+        const resultado = await firebase.auth().getRedirectResult();
+        if(resultado?.user){
+            limparRedirectEmAndamento();
+        }
+    } catch (error) {
+        limparRedirectEmAndamento();
+        console.error("Erro ao concluir o redirect de autenticação:", error);
+        window.alert("Não foi possível concluir a autenticação com Google. Tente novamente.");
     }
 }
 
 firebase.auth().onAuthStateChanged(async (user) => {
     if(user) {
         autenticacaoManualPendente = false;
+        limparRedirectEmAndamento();
         usuarioLogado = user;
         atualizarVisibilidadeTelas();
         await inicializarApp();
@@ -1011,6 +1053,17 @@ firebase.auth().onAuthStateChanged(async (user) => {
     atualizarVisibilidadeTelas();
     atualizarSaudacaoUsuario();
 });
+
+concluirRedirectAutenticacao().catch((error) => {
+    console.error("Erro inesperado ao processar retorno do Google:", error);
+});
+
+if(redirectEmAndamento()){
+    const authShell = document.getElementById("authShell");
+    if(authShell){
+        authShell.classList.remove("is-hidden");
+    }
+}
 
 garantirUIInicializada();
 
