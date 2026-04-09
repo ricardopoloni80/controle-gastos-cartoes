@@ -1060,9 +1060,10 @@ function processarUsuarioDeslogado(){
     atualizarSaudacaoUsuario();
 }
 
-function aguardarPrimeiroEstadoAuth(timeoutMs = 4000){
+function aguardarPrimeiroEstadoAuth(timeoutMs = 10000){
     return new Promise((resolve) => {
         const auth = firebase.auth();
+        const aguardandoRedirect = redirectEmAndamento();
         let resolvido = false;
         let unsubscribe = null;
 
@@ -1074,7 +1075,14 @@ function aguardarPrimeiroEstadoAuth(timeoutMs = 4000){
         };
 
         unsubscribe = auth.onAuthStateChanged((user) => {
-            finalizar(user);
+            if(user){
+                finalizar(user);
+                return;
+            }
+
+            if(!aguardandoRedirect){
+                finalizar(null);
+            }
         });
 
         window.setTimeout(() => {
