@@ -1009,10 +1009,28 @@ async function autenticarComGoogle(){
     }
 
     try {
-        marcarRedirectEmAndamento();
-        await firebase.auth().signInWithRedirect(provider);
+        await firebase.auth().signInWithPopup(provider);
     } catch (error) {
-        limparRedirectEmAndamento();
+        const deveUsarRedirect = [
+            "auth/popup-blocked",
+            "auth/popup-closed-by-user",
+            "auth/cancelled-popup-request",
+            "auth/operation-not-supported-in-this-environment"
+        ].includes(error?.code);
+
+        if(deveUsarRedirect){
+            try {
+                marcarRedirectEmAndamento();
+                await firebase.auth().signInWithRedirect(provider);
+                return;
+            } catch (redirectError) {
+                limparRedirectEmAndamento();
+                console.error("Erro ao iniciar redirect de autenticação:", redirectError);
+                window.alert("Não foi possível entrar com Google. Verifique se o provedor Google está habilitado no Firebase Auth.");
+                return;
+            }
+        }
+
         console.error("Erro ao autenticar com Google:", error);
         window.alert("Não foi possível entrar com Google. Verifique se o provedor Google está habilitado no Firebase Auth.");
     }
