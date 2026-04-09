@@ -18,6 +18,7 @@
     --radius-xl: 28px;
     --radius-lg: 20px;
     --radius-md: 14px;
+    --auth-ring: rgba(255, 255, 255, 0.18);
 }
 
 * {
@@ -79,26 +80,40 @@ body::before {
 .auth-card {
     position: relative;
     overflow: hidden;
-    width: min(100%, 760px);
+    width: min(100%, 660px);
     aspect-ratio: 1 / 1;
-    min-height: 520px;
-    padding: 32px;
-    border: 1px solid rgba(255, 255, 255, 0.35);
-    border-radius: 36px;
-    background: linear-gradient(135deg, rgba(67, 56, 202, 0.96), rgba(14, 116, 144, 0.9));
-    box-shadow: var(--shadow-lg);
+    min-height: 460px;
+    padding: 30px;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    border-radius: 38px;
+    background:
+        radial-gradient(circle at 82% 18%, rgba(255, 255, 255, 0.18), transparent 24%),
+        radial-gradient(circle at 18% 22%, rgba(255, 255, 255, 0.08), transparent 28%),
+        linear-gradient(135deg, rgba(78, 57, 205, 0.98), rgba(54, 120, 188, 0.94) 68%, rgba(40, 148, 177, 0.95));
+    box-shadow:
+        0 28px 80px rgba(42, 63, 138, 0.22),
+        inset 0 1px 0 rgba(255, 255, 255, 0.18);
     color: #ffffff;
 }
 
 .auth-card::after {
     content: "";
     position: absolute;
-    width: 280px;
-    height: 280px;
-    right: -80px;
-    top: -90px;
+    inset: 18px;
+    border-radius: 30px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    pointer-events: none;
+}
+
+.auth-card::before {
+    content: "";
+    position: absolute;
+    inset: auto 32px 32px auto;
+    width: 180px;
+    height: 180px;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(255, 255, 255, 0.22), transparent 70%);
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.16), transparent 70%);
+    filter: blur(4px);
 }
 
 .auth-card-content {
@@ -113,41 +128,77 @@ body::before {
 .auth-copy {
     display: grid;
     align-content: center;
-    gap: 16px;
+    gap: 18px;
+    justify-items: center;
+    text-align: center;
+    align-self: center;
+    transform: translateY(-18px);
 }
 
 .auth-copy h1 {
     margin-top: 0;
     max-width: 100%;
-    font-size: clamp(2rem, 4vw, 3.3rem);
+    font-size: clamp(1.9rem, 3.5vw, 3rem);
+    letter-spacing: -0.04em;
+    line-height: 1.04;
     white-space: nowrap;
+    text-shadow: 0 10px 30px rgba(10, 18, 66, 0.18);
 }
 
 .auth-actions {
     display: grid;
     justify-items: center;
     align-content: end;
-    gap: 16px;
+    gap: 18px;
     text-align: center;
+    padding: 24px 24px 10px;
+    border-radius: 28px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.08));
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
 }
 
 .auth-helper {
-    max-width: 420px;
+    max-width: 100%;
     color: rgba(255, 255, 255, 0.82);
-    font-size: 1rem;
-    line-height: 1.6;
+    font-size: 0.98rem;
+    line-height: 1.7;
+    white-space: nowrap;
 }
 
 .auth-google-button {
     min-height: 54px;
-    padding: 0 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    min-width: 236px;
+    padding: 0 24px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.18);
-    box-shadow: none;
+    background: rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow:
+        0 14px 24px rgba(18, 33, 92, 0.16),
+        inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 
 .auth-google-button:hover {
-    background: rgba(255, 255, 255, 0.28);
+    background: rgba(255, 255, 255, 0.24);
+}
+
+.google-mark {
+    display: inline-grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 4px 10px rgba(15, 23, 42, 0.12);
+}
+
+.google-mark svg {
+    width: 16px;
+    height: 16px;
 }
 
 .hero-panel {
@@ -1025,10 +1076,18 @@ tbody tr:hover td {
 
     .auth-card {
         aspect-ratio: auto;
-        min-height: 460px;
+        min-height: 430px;
     }
 
     .auth-copy h1 {
+        white-space: normal;
+    }
+
+    .auth-copy {
+        transform: none;
+    }
+
+    .auth-helper {
         white-space: normal;
     }
 
@@ -1078,13 +1137,19 @@ tbody tr:hover td {
 
 @media (max-width: 560px) {
     .auth-card {
-        min-height: 420px;
+        min-height: 390px;
         padding: 22px;
         border-radius: 24px;
     }
 
+    .auth-actions {
+        padding: 20px 16px 6px;
+        border-radius: 22px;
+    }
+
     .auth-google-button {
         width: 100%;
+        min-width: 0;
     }
 
     .hero-panel,
