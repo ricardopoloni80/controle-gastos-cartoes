@@ -983,20 +983,8 @@ async function autenticarComGoogle(){
     }
 
     try {
-        await firebase.auth().signInWithPopup(provider);
+        await firebase.auth().signInWithRedirect(provider);
     } catch (error) {
-        const deveUsarRedirect = [
-            "auth/popup-blocked",
-            "auth/popup-closed-by-user",
-            "auth/cancelled-popup-request",
-            "auth/operation-not-supported-in-this-environment"
-        ].includes(error?.code);
-
-        if(deveUsarRedirect){
-            await firebase.auth().signInWithRedirect(provider);
-            return;
-        }
-
         console.error("Erro ao autenticar com Google:", error);
         window.alert("Não foi possível entrar com Google. Verifique se o provedor Google está habilitado no Firebase Auth.");
     }
