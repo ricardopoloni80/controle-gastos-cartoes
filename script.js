@@ -1021,27 +1021,28 @@ async function autenticarComGoogle(){
 async function concluirRedirectAutenticacao(){
     try {
         const resultado = await firebase.auth().getRedirectResult();
-        if(resultado?.user){
-            limparRedirectEmAndamento();
-        }
+        if(resultado?.user) return resultado.user;
+        return firebase.auth().currentUser;
     } catch (error) {
         limparRedirectEmAndamento();
         console.error("Erro ao concluir o redirect de autenticação:", error);
         window.alert("Não foi possível concluir a autenticação com Google. Tente novamente.");
+        return null;
     }
 }
 
-firebase.auth().onAuthStateChanged(async (user) => {
-    if(user) {
-        autenticacaoManualPendente = false;
-        limparRedirectEmAndamento();
-        usuarioLogado = user;
-        atualizarVisibilidadeTelas();
-        await inicializarApp();
-        assinarDadosUsuario();
-        return;
-    }
+async function processarUsuarioAutenticado(user){
+    if(!user) return;
 
+    autenticacaoManualPendente = false;
+    limparRedirectEmAndamento();
+    usuarioLogado = user;
+    atualizarVisibilidadeTelas();
+    await inicializarApp();
+    assinarDadosUsuario();
+}
+
+function processarUsuarioDeslogado(){
     usuarioLogado = null;
     estadoPronto = false;
 
@@ -1052,10 +1053,15 @@ firebase.auth().onAuthStateChanged(async (user) => {
 
     atualizarVisibilidadeTelas();
     atualizarSaudacaoUsuario();
-});
+}
 
-concluirRedirectAutenticacao().catch((error) => {
-    console.error("Erro inesperado ao processar retorno do Google:", error);
+firebase.auth().onAuthStateChanged(async (user) => {
+    if(user) {
+        await processarUsuarioAutenticado(user);
+        return;
+    }
+
+    processarUsuarioDeslogado();
 });
 
 if(redirectEmAndamento()){
@@ -1066,5 +1072,15 @@ if(redirectEmAndamento()){
 }
 
 garantirUIInicializada();
+
+concluirRedirectAutenticacao()
+    .then(async (user) => {
+        if(user){
+            await processarUsuarioAutenticado(user);
+        }
+    })
+    .catch((error) => {
+        console.error("Erro inesperado ao processar retorno do Google:", error);
+    });
 
 
