@@ -186,6 +186,15 @@ function obterNomeUsuario(){
     return String(nome).trim();
 }
 
+function atualizarVisibilidadeTelas(){
+    const authShell = document.getElementById("authShell");
+    const appShell = document.getElementById("appShell");
+    const usuarioAutenticado = Boolean(usuarioLogado);
+
+    if(authShell) authShell.classList.toggle("is-hidden", usuarioAutenticado);
+    if(appShell) appShell.classList.toggle("is-hidden", !usuarioAutenticado);
+}
+
 function fecharMenuUsuario(){
     const menu = document.getElementById("menuUsuario");
     const botao = document.getElementById("botaoUsuario");
@@ -265,11 +274,11 @@ function atualizarSaudacaoUsuario(){
         return;
     }
 
-    container.innerHTML = `
-        <button type="button" class="user-login-button" id="botaoEntrarGoogle">Entrar com Google</button>
-    `;
+    container.innerHTML = "";
+}
 
-    document.getElementById("botaoEntrarGoogle")?.addEventListener("click", () => {
+function inicializarAutenticacaoUI(){
+    document.getElementById("botaoEntrarGoogleInicial")?.addEventListener("click", () => {
         autenticacaoManualPendente = false;
         autenticarComGoogle().catch((error) => {
             console.error("Erro ao iniciar login manual:", error);
@@ -935,9 +944,11 @@ async function inicializarApp(){
 function garantirUIInicializada(){
     if(appInicializado) return;
 
+    inicializarAutenticacaoUI();
     carregarAnos();
     inicializarSelectsDinamicos();
     inicializarFiltros();
+    atualizarVisibilidadeTelas();
     atualizarTela();
     appInicializado = true;
 }
@@ -995,6 +1006,7 @@ firebase.auth().onAuthStateChanged(async (user) => {
     if(user) {
         autenticacaoManualPendente = false;
         usuarioLogado = user;
+        atualizarVisibilidadeTelas();
         await inicializarApp();
         assinarDadosUsuario();
         return;
@@ -1008,13 +1020,8 @@ firebase.auth().onAuthStateChanged(async (user) => {
         unsubscribeDados = null;
     }
 
+    atualizarVisibilidadeTelas();
     atualizarSaudacaoUsuario();
-
-    if(autenticacaoManualPendente){
-        return;
-    }
-
-    await autenticarComGoogle();
 });
 
 garantirUIInicializada();
