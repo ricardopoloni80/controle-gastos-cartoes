@@ -883,9 +883,8 @@ function atualizarTela(){
     const lista = document.getElementById("lista");
     lista.innerHTML = "";
 
-    const lancamentosMes = getLancamentosMes();
     const lancamentosFiltrados = getLancamentosFiltrados();
-    const total = lancamentosMes.reduce((acumulado, gasto) => acumulado + gasto.valor, 0);
+    const total = lancamentosFiltrados.reduce((acumulado, gasto) => acumulado + gasto.valor, 0);
 
     if(lancamentosFiltrados.length === 0){
         lista.innerHTML = `
