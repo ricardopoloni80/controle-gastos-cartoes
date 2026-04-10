@@ -590,7 +590,15 @@ function gerarMapaCoresCartoes(cartoesLista){
 function getLancamentosAnoAtual(){
     if(!dados[anoAtual]) return [];
 
-    return Object.values(dados[anoAtual]).flat();
+    const lancamentosAcumulados = [];
+
+    for(let mes = 0; mes <= mesAtual; mes++){
+        if(dados[anoAtual][mes]){
+            lancamentosAcumulados.push(...dados[anoAtual][mes]);
+        }
+    }
+
+    return lancamentosAcumulados;
 }
 
 function gerarDadosPizzaPorCartao(lancamentos){
