@@ -593,13 +593,14 @@ function getLancamentosAnoAtual(){
     return Object.values(dados[anoAtual]).flat();
 }
 
-function gerarDadosPizzaAnual(){
-    const lancamentosAno = getLancamentosAnoAtual();
-    const categoriasAno = obterListaUnica(lancamentosAno.map((gasto) => gasto.categoria).filter(Boolean), "categoria");
-    const mapaCores = gerarMapaCoresCategorias(categoriasAno);
+function gerarDadosPizzaPorCartao(lancamentos){
+    const categoriasPeriodo = obterListaUnica(lancamentos.map((gasto) => gasto.categoria).filter(Boolean), "categoria");
+    const cartoesPeriodo = obterListaUnica(lancamentos.map((gasto) => gasto.cartao).filter(Boolean), "cartao");
+    const cartoesLegenda = obterListaUnica([...cartoes, ...cartoesPeriodo], "cartao");
+    const mapaCores = gerarMapaCoresCategorias(categoriasPeriodo);
 
-    return cartoes.map((cartao) => {
-        const lancamentosCartao = lancamentosAno.filter((gasto) => normalizarChaveLista(gasto.cartao) === normalizarChaveLista(cartao));
+    return cartoesLegenda.map((cartao) => {
+        const lancamentosCartao = lancamentos.filter((gasto) => normalizarChaveLista(gasto.cartao) === normalizarChaveLista(cartao));
         const totaisPorCategoria = new Map();
 
         lancamentosCartao.forEach((gasto) => {
@@ -625,14 +626,21 @@ function gerarDadosPizzaAnual(){
     });
 }
 
-function gerarDadosPizzaGeralCartoes(){
-    const lancamentosAno = getLancamentosAnoAtual();
-    const cartoesAno = obterListaUnica(lancamentosAno.map((gasto) => gasto.cartao).filter(Boolean), "cartao");
-    const cartoesLegenda = obterListaUnica([...cartoes, ...cartoesAno], "cartao");
+function gerarDadosPizzaAnual(){
+    return gerarDadosPizzaPorCartao(getLancamentosAnoAtual());
+}
+
+function gerarDadosPizzaMensal(){
+    return gerarDadosPizzaPorCartao(getLancamentosMes());
+}
+
+function gerarDadosPizzaGeralCartoes(lancamentos, titulo){
+    const cartoesPeriodo = obterListaUnica(lancamentos.map((gasto) => gasto.cartao).filter(Boolean), "cartao");
+    const cartoesLegenda = obterListaUnica([...cartoes, ...cartoesPeriodo], "cartao");
     const mapaCores = gerarMapaCoresCartoes(cartoesLegenda);
     const totaisPorCartao = new Map();
 
-    lancamentosAno.forEach((gasto) => {
+    lancamentos.forEach((gasto) => {
         const cartao = gasto.cartao || "Sem cartão";
         totaisPorCartao.set(cartao, (totaisPorCartao.get(cartao) || 0) + gasto.valor);
     });
@@ -646,7 +654,7 @@ function gerarDadosPizzaGeralCartoes(){
         .sort((a, b) => b.total - a.total);
 
     return {
-        cartao: "Total geral de cartões",
+        cartao: titulo,
         total: itens.reduce((acumulado, item) => acumulado + item.total, 0),
         categorias: itens
     };
@@ -742,7 +750,7 @@ function montarCardPizza(cartaoInfo, extraClass = "", mostrarPercentualNoGrafico
                     <div class="pie-card-total">${formatarMoeda(0)}</div>
                 </div>
                 <div class="pie-chart-wrap">
-                    <div class="pie-chart-empty">Sem gastos no ano selecionado</div>
+                    <div class="pie-chart-empty">Sem gastos no per&iacute;odo selecionado</div>
                 </div>
             </article>
         `;
@@ -779,11 +787,21 @@ function montarCardPizza(cartaoInfo, extraClass = "", mostrarPercentualNoGrafico
     `;
 }
 
+function renderizarGraficosPizzaMensais(){
+    const container = document.getElementById("graficosCartoesMes");
+    const containerResumo = document.getElementById("graficoGeralCartoesMes");
+    const dadosPizza = gerarDadosPizzaMensal();
+    const graficoGeral = gerarDadosPizzaGeralCartoes(getLancamentosMes(), "Total mensal de cartões");
+
+    container.innerHTML = dadosPizza.map((cartaoInfo) => montarCardPizza(cartaoInfo)).join("");
+    containerResumo.innerHTML = montarCardPizza(graficoGeral, "summary-card", true);
+}
+
 function renderizarGraficosPizzaAnuais(){
     const container = document.getElementById("graficosCartoesAno");
     const containerResumo = document.getElementById("graficoGeralCartoes");
     const dadosPizza = gerarDadosPizzaAnual();
-    const graficoGeral = gerarDadosPizzaGeralCartoes();
+    const graficoGeral = gerarDadosPizzaGeralCartoes(getLancamentosAnoAtual(), "Total geral de cartões");
 
     container.innerHTML = dadosPizza.map((cartaoInfo) => montarCardPizza(cartaoInfo)).join("");
     containerResumo.innerHTML = montarCardPizza(graficoGeral, "summary-card", true);
@@ -902,6 +920,7 @@ function atualizarTela(){
 
     document.getElementById("total").innerText = formatarMoeda(total);
     renderizarGraficoCategorias();
+    renderizarGraficosPizzaMensais();
     renderizarGraficosPizzaAnuais();
 }
 
