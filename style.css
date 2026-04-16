@@ -616,14 +616,14 @@ button:active {
 .chart-plot {
     position: relative;
     display: grid;
-    grid-template-rows: 260px auto;
+    grid-template-rows: 276px auto;
     gap: 18px;
     min-width: max-content;
 }
 
 .chart-grid {
     position: absolute;
-    inset: 10px 0 114px 0;
+    inset: 26px 0 96px 0;
     display: grid;
     grid-template-rows: repeat(5, 1fr);
 }
@@ -640,14 +640,14 @@ button:active {
     grid-auto-columns: minmax(92px, 92px);
     align-items: end;
     gap: 16px;
-    height: 260px;
-    padding: 10px 4px 0;
+    height: 276px;
+    padding: 26px 4px 0;
     border-bottom: 2px solid rgba(79, 70, 229, 0.18);
 }
 
 .chart-bar-group {
     display: grid;
-    grid-template-rows: 220px 96px;
+    grid-template-rows: 220px 72px;
     gap: 0;
     align-items: end;
 }
@@ -657,6 +657,7 @@ button:active {
     align-items: end;
     justify-content: center;
     height: 220px;
+    overflow: visible;
 }
 
 .chart-bar {
@@ -680,22 +681,21 @@ button:active {
 }
 
 .chart-bar-label-wrap {
-    position: relative;
-    height: 96px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    height: 72px;
+    padding-top: 12px;
 }
 
 .chart-bar-label {
-    position: absolute;
-    left: 50%;
-    top: 8px;
-    width: 110px;
-    transform: translateX(-8px) rotate(-45deg);
-    transform-origin: top left;
+    width: 100%;
+    max-width: 110px;
     color: var(--text-soft);
     font-size: 0.82rem;
     font-weight: 700;
     line-height: 1.35;
-    text-align: left;
+    text-align: center;
     word-break: break-word;
     white-space: normal;
 }
@@ -723,7 +723,7 @@ button:active {
 
 .pie-card {
     display: grid;
-    grid-template-rows: auto 220px minmax(0, 1fr);
+    grid-template-rows: auto 220px auto;
     gap: 16px;
     padding: 20px;
     border: 1px solid rgba(148, 163, 184, 0.18);
@@ -805,9 +805,9 @@ button:active {
     display: grid;
     gap: 10px;
     align-content: start;
-    max-height: 220px;
-    overflow-y: auto;
-    padding-right: 4px;
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
 }
 
 .pie-legend-item {
