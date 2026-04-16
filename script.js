@@ -54,6 +54,10 @@ const coresCartoes = [
     "#64748b"
 ];
 
+function gerarIdSerie(){
+    return `serie-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 function normalizarTexto(valor){
     return String(valor || "").toLowerCase().trim();
 }
@@ -471,12 +475,14 @@ function inicializarFiltros(){
     document.getElementById("filtroCartao").addEventListener("change", (event) => {
         filtros.cartao = event.target.value;
         editandoIndex = null;
+        fecharFiltros();
         atualizarTela();
     });
 
     document.getElementById("filtroCategoria").addEventListener("change", (event) => {
         filtros.categoria = event.target.value;
         editandoIndex = null;
+        fecharFiltros();
         atualizarTela();
     });
 
@@ -484,6 +490,14 @@ function inicializarFiltros(){
         filtros.valor = event.target.value;
         editandoIndex = null;
         atualizarTela();
+    });
+
+    document.getElementById("filtroDescricao").addEventListener("keydown", (event) => {
+        if(event.key === "Enter") fecharFiltros();
+    });
+
+    document.getElementById("filtroValor").addEventListener("keydown", (event) => {
+        if(event.key === "Enter") fecharFiltros();
     });
 
     document.addEventListener("click", (event) => {
@@ -526,6 +540,218 @@ function fecharFiltros(){
 function getLancamentosMes(){
     if(!dados[anoAtual] || !dados[anoAtual][mesAtual]) return [];
     return dados[anoAtual][mesAtual];
+}
+
+function obterDescricaoBase(descricao){
+    const texto = String(descricao || "").trim();
+    const correspondencia = texto.match(/^(.*)\s+\((\d+)\/(\d+)\)$/);
+    if(!correspondencia) return texto;
+    return correspondencia[1].trim();
+}
+
+function obterInfoParcela(gasto){
+    if(gasto?.serieIgnorada){
+        return {
+            base: obterDescricaoBase(gasto.descricao),
+            numero: 1,
+            total: 1,
+            possuiSerie: false
+        };
+    }
+
+    const totalSerie = Number.parseInt(gasto?.serieTotalParcelas, 10);
+    const numeroSerie = Number.parseInt(gasto?.serieNumeroParcela, 10);
+
+    if(Number.isInteger(totalSerie) && totalSerie > 1 && Number.isInteger(numeroSerie) && numeroSerie >= 1){
+        return {
+            base: String(gasto.serieDescricaoBase || obterDescricaoBase(gasto.descricao)),
+            numero: numeroSerie,
+            total: totalSerie,
+            possuiSerie: true
+        };
+    }
+
+    const descricao = String(gasto?.descricao || "").trim();
+    const correspondencia = descricao.match(/^(.*)\s+\((\d+)\/(\d+)\)$/);
+    if(!correspondencia){
+        return {
+            base: descricao,
+            numero: 1,
+            total: 1,
+            possuiSerie: false
+        };
+    }
+
+    const numero = Number.parseInt(correspondencia[2], 10);
+    const total = Number.parseInt(correspondencia[3], 10);
+
+    return {
+        base: correspondencia[1].trim(),
+        numero,
+        total,
+        possuiSerie: Number.isInteger(total) && total > 1
+    };
+}
+
+function montarDescricaoLancamento(base, numeroParcela, totalParcelas){
+    const descricaoBase = String(base || "").trim();
+    if(totalParcelas > 1) return `${descricaoBase} (${numeroParcela}/${totalParcelas})`;
+    return descricaoBase;
+}
+
+function limparMetadadosSerie(gasto){
+    const copia = { ...gasto };
+    delete copia.serieId;
+    delete copia.serieTotalParcelas;
+    delete copia.serieNumeroParcela;
+    delete copia.serieDescricaoBase;
+    copia.serieIgnorada = true;
+    return copia;
+}
+
+function listarLancamentosComReferencia(){
+    const referencias = [];
+
+    Object.keys(dados || {}).forEach((ano) => {
+        const mesesAno = dados[ano];
+        if(!mesesAno || typeof mesesAno !== "object") return;
+
+        Object.keys(mesesAno).forEach((mes) => {
+            const lista = mesesAno[mes];
+            if(!Array.isArray(lista)) return;
+
+            lista.forEach((lancamento, index) => {
+                referencias.push({
+                    ano: String(ano),
+                    mes: Number(mes),
+                    index,
+                    lancamento
+                });
+            });
+        });
+    });
+
+    return referencias;
+}
+
+function ordenarReferenciasSerie(lista){
+    return [...lista].sort((a, b) => {
+        if(Number(a.ano) !== Number(b.ano)) return Number(a.ano) - Number(b.ano);
+        if(a.mes !== b.mes) return a.mes - b.mes;
+
+        const infoA = obterInfoParcela(a.lancamento);
+        const infoB = obterInfoParcela(b.lancamento);
+        if(infoA.numero !== infoB.numero) return infoA.numero - infoB.numero;
+        return a.index - b.index;
+    });
+}
+
+function obterSerieLancamento(ano, mes, index){
+    const listaMes = dados?.[ano]?.[mes];
+    const lancamentoAtual = Array.isArray(listaMes) ? listaMes[index] : null;
+    if(!lancamentoAtual) return [];
+
+    const infoAtual = obterInfoParcela(lancamentoAtual);
+    const serieId = String(lancamentoAtual.serieId || "").trim();
+
+    let referenciasSerie = [];
+
+    if(serieId){
+        referenciasSerie = listarLancamentosComReferencia().filter((ref) => String(ref.lancamento?.serieId || "").trim() === serieId);
+    } else if(infoAtual.possuiSerie){
+        const chaveComparacao = [
+            normalizarChaveLista(infoAtual.base),
+            normalizarChaveLista(lancamentoAtual.cartao),
+            normalizarChaveLista(lancamentoAtual.categoria),
+            Number(lancamentoAtual.valor || 0).toFixed(2),
+            infoAtual.total
+        ].join("|");
+
+        referenciasSerie = listarLancamentosComReferencia().filter((ref) => {
+            const infoRef = obterInfoParcela(ref.lancamento);
+            const chaveRef = [
+                normalizarChaveLista(infoRef.base),
+                normalizarChaveLista(ref.lancamento?.cartao),
+                normalizarChaveLista(ref.lancamento?.categoria),
+                Number(ref.lancamento?.valor || 0).toFixed(2),
+                infoRef.total
+            ].join("|");
+
+            return infoRef.possuiSerie && chaveRef === chaveComparacao;
+        });
+    } else {
+        referenciasSerie = [{
+            ano: String(ano),
+            mes: Number(mes),
+            index,
+            lancamento: lancamentoAtual
+        }];
+    }
+
+    return ordenarReferenciasSerie(referenciasSerie);
+}
+
+function obterModoEdicaoSerie(referenciasSerie, referenciaAtual){
+    if(referenciasSerie.length <= 1) return "ocorrencia";
+
+    const infoAtual = obterInfoParcela(referenciaAtual.lancamento);
+    const possuiProximas = referenciasSerie.some((ref) => {
+        const infoRef = obterInfoParcela(ref.lancamento);
+        return Number(infoRef.numero) > Number(infoAtual.numero);
+    });
+
+    if(!possuiProximas) return "ocorrencia";
+
+    const resposta = window.prompt(
+        "Este lançamento faz parte de uma série.\nDigite 1 para alterar somente esta ocorrência.\nDigite 2 para alterar esta ocorrência e as demais da série.",
+        "2"
+    );
+
+    if(resposta === null) return null;
+
+    const valor = resposta.trim();
+    if(valor === "1") return "ocorrencia";
+    if(valor === "2") return "serie";
+
+    window.alert("Escolha inválida. Digite 1 ou 2.");
+    return null;
+}
+
+function obterModoExclusaoSerie(referenciasSerie){
+    if(referenciasSerie.length <= 1) return "ocorrencia";
+
+    const resposta = window.prompt(
+        "Este lançamento faz parte de uma série.\nDigite 1 para excluir somente esta ocorrência.\nDigite 2 para excluir toda a série.",
+        "1"
+    );
+
+    if(resposta === null) return null;
+
+    const valor = resposta.trim();
+    if(valor === "1") return "ocorrencia";
+    if(valor === "2") return "serie";
+
+    window.alert("Escolha inválida. Digite 1 ou 2.");
+    return null;
+}
+
+function obterReferenciasParaEdicao(referenciasSerie, referenciaAtual, modo){
+    if(modo !== "serie") return [referenciaAtual];
+
+    const infoAtual = obterInfoParcela(referenciaAtual.lancamento);
+    return referenciasSerie.filter((ref) => {
+        const infoRef = obterInfoParcela(ref.lancamento);
+        return Number(infoRef.numero) >= Number(infoAtual.numero);
+    });
+}
+
+function atualizarEstadoFiltrosVisuais(){
+    document.querySelectorAll(".filter-toggle").forEach((botao) => {
+        const chave = botao.dataset.filterKey;
+        const ativo = Boolean(String(filtros[chave] || "").trim());
+        botao.classList.toggle("is-active", ativo);
+        botao.setAttribute("aria-pressed", ativo ? "true" : "false");
+    });
 }
 
 function getLancamentosFiltrados(){
@@ -689,22 +915,26 @@ function renderizarGraficoCategorias(){
                         <span class="chart-bar-value">${formatarMoeda(item.total)}</span>
                     </div>
                 </div>
-                <div class="chart-bar-label">${escapeHtml(item.categoria)}</div>
+                <div class="chart-bar-label-wrap">
+                    <div class="chart-bar-label" title="${escapeHtml(item.categoria)}">${escapeHtml(item.categoria)}</div>
+                </div>
             </div>
         `;
     }).join("");
 
     grafico.innerHTML = `
-        <div class="bar-chart">
-            <div class="chart-plot">
-                <div class="chart-grid">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                    <span></span>
+        <div class="bar-chart-scroll">
+            <div class="bar-chart">
+                <div class="chart-plot">
+                    <div class="chart-grid">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                    <div class="chart-bars">${barras}</div>
                 </div>
-                <div class="chart-bars">${barras}</div>
             </div>
         </div>
     `;
@@ -790,7 +1020,7 @@ function montarCardPizza(cartaoInfo, extraClass = "", mostrarPercentualNoGrafico
                     ${labelsPercentuais}
                 </div>
             </div>
-            <div class="pie-legend">${legenda}</div>
+            <div class="pie-legend" title="Categorias de ${escapeHtml(cartaoInfo.cartao)}">${legenda}</div>
         </article>
     `;
 }
@@ -825,6 +1055,7 @@ async function adicionarGasto(){
     if(!descricao || !cartao || !categoria || !valor || !parcelas) return;
 
     const valorParcela = valor / parcelas;
+    const serieId = parcelas > 1 ? gerarIdSerie() : "";
 
     for(let i = 0; i < parcelas; i++){
         let mesParcela = mesAtual + i;
@@ -839,10 +1070,14 @@ async function adicionarGasto(){
         if(!dados[anoParcela][mesParcela]) dados[anoParcela][mesParcela] = [];
 
         dados[anoParcela][mesParcela].push({
-            descricao: `${descricao} (${i + 1}/${parcelas})`,
+            descricao: montarDescricaoLancamento(descricao, i + 1, parcelas),
             cartao,
             categoria,
-            valor: valorParcela
+            valor: valorParcela,
+            serieId,
+            serieNumeroParcela: i + 1,
+            serieTotalParcelas: parcelas,
+            serieDescricaoBase: descricao
         });
     }
 
@@ -860,9 +1095,11 @@ function limparFormulario(){
 }
 
 function renderLinhaEdicao(gasto){
+    const infoParcela = obterInfoParcela(gasto);
+
     return `
         <tr class="edit-row">
-            <td><input type="text" id="editDescricao" value="${escapeHtml(gasto.descricao)}"></td>
+            <td><input type="text" id="editDescricao" value="${escapeHtml(infoParcela.base)}"></td>
             <td>
                 <select id="editCartao">
                     ${montarOpcoesEdicao(cartoes, gasto.cartao)}
@@ -887,7 +1124,11 @@ function renderLinhaEdicao(gasto){
 function renderLinhaVisual(gasto){
     return `
         <tr>
-            <td>${escapeHtml(gasto.descricao)}</td>
+            <td>
+                <button class="description-button" type="button" onclick="iniciarEdicao(${gasto.originalIndex})" title="Editar descrição">
+                    ${escapeHtml(gasto.descricao)}
+                </button>
+            </td>
             <td>${escapeHtml(gasto.cartao)}</td>
             <td>${escapeHtml(gasto.categoria)}</td>
             <td>${formatarMoeda(gasto.valor)}</td>
@@ -926,6 +1167,7 @@ function atualizarTela(){
         });
     }
 
+    atualizarEstadoFiltrosVisuais();
     document.getElementById("total").innerText = formatarMoeda(total);
     renderizarGraficoCategorias();
     renderizarGraficosPizzaMensais();
@@ -935,6 +1177,13 @@ function atualizarTela(){
 function iniciarEdicao(index){
     editandoIndex = index;
     atualizarTela();
+    window.setTimeout(() => {
+        const campoDescricao = document.getElementById("editDescricao");
+        if(campoDescricao){
+            campoDescricao.focus();
+            campoDescricao.select();
+        }
+    }, 0);
 }
 
 function cancelarEdicao(){
@@ -950,12 +1199,39 @@ async function salvarEdicao(index){
 
     if(!descricao || !cartao || !categoria || !valor) return;
 
-    dados[anoAtual][mesAtual][index] = {
-        descricao,
-        cartao,
-        categoria,
-        valor
-    };
+    const referenciasSerie = obterSerieLancamento(anoAtual, mesAtual, index);
+    const referenciaAtual = referenciasSerie.find((ref) => ref.ano === String(anoAtual) && ref.mes === Number(mesAtual) && ref.index === index);
+    if(!referenciaAtual) return;
+
+    const modo = obterModoEdicaoSerie(referenciasSerie, referenciaAtual);
+    if(!modo) return;
+
+    const referenciasAlvo = obterReferenciasParaEdicao(referenciasSerie, referenciaAtual, modo);
+    const serieIdAtualizada = modo === "serie"
+        ? (referenciaAtual.lancamento.serieId || gerarIdSerie())
+        : "";
+
+    referenciasAlvo.forEach((ref) => {
+        const infoParcela = obterInfoParcela(ref.lancamento);
+        const lancamentoAtualizado = {
+            ...ref.lancamento,
+            descricao: montarDescricaoLancamento(descricao, infoParcela.numero, infoParcela.total),
+            cartao,
+            categoria,
+            valor
+        };
+
+        dados[ref.ano][ref.mes][ref.index] = modo === "ocorrencia"
+            ? limparMetadadosSerie(lancamentoAtualizado)
+            : {
+                ...lancamentoAtualizado,
+                serieId: serieIdAtualizada,
+                serieNumeroParcela: infoParcela.numero,
+                serieTotalParcelas: infoParcela.total,
+                serieDescricaoBase: descricao,
+                serieIgnorada: false
+            };
+    });
 
     await salvarEstado();
     editandoIndex = null;
@@ -965,11 +1241,32 @@ async function salvarEdicao(index){
 async function remover(index){
     if(!dados[anoAtual] || !dados[anoAtual][mesAtual]) return;
 
-    dados[anoAtual][mesAtual].splice(index, 1);
+    const referenciasSerie = obterSerieLancamento(anoAtual, mesAtual, index);
+    const referenciaAtual = referenciasSerie.find((ref) => ref.ano === String(anoAtual) && ref.mes === Number(mesAtual) && ref.index === index);
+    if(!referenciaAtual) return;
 
-    if(dados[anoAtual][mesAtual].length === 0){
-        delete dados[anoAtual][mesAtual];
-    }
+    const modo = obterModoExclusaoSerie(referenciasSerie);
+    if(!modo) return;
+
+    const referenciasParaExcluir = modo === "serie" ? referenciasSerie : [referenciaAtual];
+    const agrupadas = new Map();
+
+    referenciasParaExcluir.forEach((ref) => {
+        const chave = `${ref.ano}-${ref.mes}`;
+        if(!agrupadas.has(chave)) agrupadas.set(chave, []);
+        agrupadas.get(chave).push(ref.index);
+    });
+
+    agrupadas.forEach((indices, chave) => {
+        const [ano, mes] = chave.split("-");
+        indices.sort((a, b) => b - a).forEach((indice) => {
+            dados[ano][mes].splice(indice, 1);
+        });
+
+        if(dados[ano][mes].length === 0){
+            delete dados[ano][mes];
+        }
+    });
 
     editandoIndex = null;
     await salvarEstado();
