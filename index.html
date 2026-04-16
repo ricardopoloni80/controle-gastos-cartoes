@@ -83,19 +83,25 @@
             </div>
         </section>
 
-        <section class="surface-card table-panel">
+        <section class="surface-card table-panel collapsible-panel" id="painelLancamentos">
             <div class="section-topbar">
                 <div class="section-heading">
                     <h2>Lan&ccedil;amentos do m&ecirc;s</h2>
                     <p>Visualize, filtre, edite e remova despesas registradas.</p>
                 </div>
 
-                <div class="total-card">
-                    <span class="total-label">Total do m&ecirc;s</span>
-                    <span class="total-value" id="total">R$ 0,00</span>
+                <div class="section-actions">
+                    <div class="total-card">
+                        <span class="total-label">Total do m&ecirc;s</span>
+                        <span class="total-value" id="total">R$ 0,00</span>
+                    </div>
+                    <button type="button" class="panel-toggle" onclick="togglePainel('painelLancamentos')" aria-expanded="true" aria-controls="conteudoLancamentos" title="Recolher ou expandir lan&ccedil;amentos">
+                        <span class="panel-toggle-icon" aria-hidden="true">^</span>
+                    </button>
                 </div>
             </div>
 
+            <div class="panel-content" id="conteudoLancamentos">
             <div class="table-wrap">
                 <table>
                     <thead>
@@ -166,37 +172,59 @@
                     <tbody id="lista"></tbody>
                 </table>
             </div>
-        </section>
-
-        <section class="surface-card chart-panel">
-            <div class="section-heading">
-                <h2>Gr&aacute;fico de gastos por categoria</h2>
-                <p>Visualize rapidamente como os gastos do m&ecirc;s selecionado est&atilde;o distribu&iacute;dos entre as categorias.</p>
-            </div>
-
-            <div class="chart-card">
-                <div class="chart-area" id="graficoCategorias"></div>
             </div>
         </section>
 
-        <section class="surface-card pie-panel">
-            <div class="section-heading">
-                <h2>Gr&aacute;ficos mensal por cart&atilde;o</h2>
-                <p>Confira os gastos do m&ecirc;s selecionado em cada cart&atilde;o, distribu&iacute;dos por categoria.</p>
+        <section class="surface-card chart-panel collapsible-panel" id="painelGraficoCategorias">
+            <div class="section-topbar">
+                <div class="section-heading">
+                    <h2>Gr&aacute;fico de gastos por categoria</h2>
+                    <p>Visualize rapidamente como os gastos do m&ecirc;s selecionado est&atilde;o distribu&iacute;dos entre as categorias.</p>
+                </div>
+                <button type="button" class="panel-toggle" onclick="togglePainel('painelGraficoCategorias')" aria-expanded="true" aria-controls="conteudoGraficoCategorias" title="Recolher ou expandir gr&aacute;fico por categoria">
+                    <span class="panel-toggle-icon" aria-hidden="true">^</span>
+                </button>
             </div>
 
-            <div class="pie-grid" id="graficosCartoesMes"></div>
-            <div class="pie-summary" id="graficoGeralCartoesMes"></div>
+            <div class="panel-content" id="conteudoGraficoCategorias">
+                <div class="chart-card">
+                    <div class="chart-area" id="graficoCategorias"></div>
+                </div>
+            </div>
         </section>
 
-        <section class="surface-card pie-panel">
-            <div class="section-heading">
-                <h2>Gr&aacute;ficos anuais por cart&atilde;o</h2>
-                <p>Confira os gastos acumulados do ano selecionado em cada cart&atilde;o, distribu&iacute;dos por categoria.</p>
+        <section class="surface-card pie-panel collapsible-panel" id="painelGraficosMensais">
+            <div class="section-topbar">
+                <div class="section-heading">
+                    <h2>Gr&aacute;ficos mensal por cart&atilde;o</h2>
+                    <p>Confira os gastos do m&ecirc;s selecionado em cada cart&atilde;o, distribu&iacute;dos por categoria.</p>
+                </div>
+                <button type="button" class="panel-toggle" onclick="togglePainel('painelGraficosMensais')" aria-expanded="true" aria-controls="conteudoGraficosMensais" title="Recolher ou expandir gr&aacute;ficos mensais por cart&atilde;o">
+                    <span class="panel-toggle-icon" aria-hidden="true">^</span>
+                </button>
             </div>
 
-            <div class="pie-grid" id="graficosCartoesAno"></div>
-            <div class="pie-summary" id="graficoGeralCartoes"></div>
+            <div class="panel-content" id="conteudoGraficosMensais">
+                <div class="pie-grid" id="graficosCartoesMes"></div>
+                <div class="pie-summary" id="graficoGeralCartoesMes"></div>
+            </div>
+        </section>
+
+        <section class="surface-card pie-panel collapsible-panel" id="painelGraficosAnuais">
+            <div class="section-topbar">
+                <div class="section-heading">
+                    <h2>Gr&aacute;ficos anuais por cart&atilde;o</h2>
+                    <p>Confira os gastos acumulados do ano selecionado em cada cart&atilde;o, distribu&iacute;dos por categoria.</p>
+                </div>
+                <button type="button" class="panel-toggle" onclick="togglePainel('painelGraficosAnuais')" aria-expanded="true" aria-controls="conteudoGraficosAnuais" title="Recolher ou expandir gr&aacute;ficos anuais por cart&atilde;o">
+                    <span class="panel-toggle-icon" aria-hidden="true">^</span>
+                </button>
+            </div>
+
+            <div class="panel-content" id="conteudoGraficosAnuais">
+                <div class="pie-grid" id="graficosCartoesAno"></div>
+                <div class="pie-summary" id="graficoGeralCartoes"></div>
+            </div>
         </section>
     </main>
 

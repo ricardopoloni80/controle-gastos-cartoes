@@ -537,6 +537,19 @@ function fecharFiltros(){
     });
 }
 
+function togglePainel(painelId){
+    const painel = document.getElementById(painelId);
+    if(!painel) return;
+
+    const vaiFechar = !painel.classList.contains("is-collapsed");
+    painel.classList.toggle("is-collapsed", vaiFechar);
+
+    const botao = painel.querySelector(".panel-toggle");
+    if(botao){
+        botao.setAttribute("aria-expanded", vaiFechar ? "false" : "true");
+    }
+}
+
 function getLancamentosMes(){
     if(!dados[anoAtual] || !dados[anoAtual][mesAtual]) return [];
     return dados[anoAtual][mesAtual];
