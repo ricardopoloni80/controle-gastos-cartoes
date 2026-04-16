@@ -924,9 +924,7 @@ function renderizarGraficoCategorias(){
         return `
             <div class="chart-bar-group">
                 <div class="chart-bar-wrap">
-                    <div class="chart-bar" style="height: ${altura}%;">
-                        <span class="chart-bar-value">${formatarMoeda(item.total)}</span>
-                    </div>
+                    <div class="chart-bar" style="height: ${altura}%;"></div>
                 </div>
                 <div class="chart-bar-label-wrap">
                     <div class="chart-bar-label" title="${escapeHtml(item.categoria)}">${escapeHtml(item.categoria)}</div>
