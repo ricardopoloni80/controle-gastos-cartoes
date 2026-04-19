@@ -661,11 +661,11 @@ button:active {
 
 .chart-plot {
     position: relative;
-    display: block;
+    display: grid;
+    grid-template-rows: 276px 138px;
+    row-gap: 0;
     min-width: max-content;
-    padding-bottom: 138px;
     min-height: 414px;
-    min-width: max-content;
 }
 
 .chart-grid {
@@ -687,16 +687,15 @@ button:active {
     grid-auto-columns: minmax(92px, 92px);
     align-items: end;
     gap: 16px;
-    min-height: 276px;
+    height: 276px;
     padding: 26px 4px 0;
     border-bottom: 2px solid rgba(79, 70, 229, 0.18);
 }
 
 .chart-bar-group {
-    display: grid;
-    grid-template-rows: 220px 124px;
-    gap: 0;
+    display: flex;
     align-items: end;
+    justify-content: center;
 }
 
 .chart-bar-wrap {
@@ -727,17 +726,26 @@ button:active {
     white-space: nowrap;
 }
 
+.chart-labels {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(92px, 92px);
+    gap: 16px;
+    align-items: start;
+    min-height: 138px;
+    padding: 18px 4px 0;
+}
+
 .chart-bar-label-wrap {
     position: relative;
-    height: 124px;
-    padding-top: 28px;
+    height: 120px;
     overflow: visible;
 }
 
 .chart-bar-label {
     position: absolute;
     left: 50%;
-    top: 28px;
+    top: 0;
     width: 110px;
     transform: translateX(-50%) rotate(-45deg);
     transform-origin: top left;
@@ -793,17 +801,27 @@ button:active {
     align-items: start;
 }
 
+.pie-card-header-detailed {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+        "title vencimento"
+        "total compra";
+    align-items: center;
+}
+
 .pie-card-title {
     font-size: 1rem;
     font-weight: 800;
     color: var(--text-main);
     min-width: 0;
+    grid-area: title;
 }
 
 .pie-card-total {
     color: var(--text-soft);
     font-size: 0.9rem;
     font-weight: 700;
+    grid-area: total;
 }
 
 .pie-card-meta {
@@ -811,6 +829,14 @@ button:active {
     font-size: 0.86rem;
     text-align: right;
     white-space: nowrap;
+}
+
+.pie-card-header-detailed .pie-card-meta:first-of-type {
+    grid-area: vencimento;
+}
+
+.pie-card-header-detailed .pie-card-meta:last-of-type {
+    grid-area: compra;
 }
 
 .pie-card-meta strong {
@@ -1302,8 +1328,22 @@ tbody tr:hover td {
         grid-auto-columns: minmax(82px, 82px);
     }
 
+    .chart-labels {
+        gap: 12px;
+        grid-auto-columns: minmax(82px, 82px);
+    }
+
     .pie-card-header {
         grid-template-columns: 1fr;
+    }
+
+    .pie-card-header-detailed {
+        grid-template-columns: 1fr;
+        grid-template-areas:
+            "title"
+            "total"
+            "vencimento"
+            "compra";
     }
 
     .pie-card-meta {

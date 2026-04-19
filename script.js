@@ -975,12 +975,15 @@ function renderizarGraficoCategorias(){
                 <div class="chart-bar-wrap">
                     <div class="chart-bar" style="height: ${altura}%;"></div>
                 </div>
-                <div class="chart-bar-label-wrap">
-                    <div class="chart-bar-label" title="${escapeHtml(item.categoria)}">${escapeHtml(item.categoria)}</div>
-                </div>
             </div>
         `;
     }).join("");
+
+    const labels = dadosGrafico.map((item) => `
+        <div class="chart-bar-label-wrap">
+            <div class="chart-bar-label" title="${escapeHtml(item.categoria)}">${escapeHtml(item.categoria)}</div>
+        </div>
+    `).join("");
 
     grafico.innerHTML = `
         <div class="bar-chart-scroll">
@@ -994,6 +997,7 @@ function renderizarGraficoCategorias(){
                         <span></span>
                     </div>
                     <div class="chart-bars">${barras}</div>
+                    <div class="chart-labels">${labels}</div>
                 </div>
             </div>
         </div>
@@ -1029,6 +1033,29 @@ function montarMetaCartao(rotulo, valor){
     return `<div class="pie-card-meta"><strong>${rotulo}:</strong> ${escapeHtml(valor)}</div>`;
 }
 
+function montarCabecalhoCardPizza(cartaoInfo, totalFormatado, extraClass = ""){
+    const infoCartao = obterInformacoesCartao(cartaoInfo.cartao);
+    const isResumo = extraClass.includes("summary-card");
+
+    if(infoCartao && !isResumo){
+        return `
+            <div class="pie-card-header pie-card-header-detailed">
+                <div class="pie-card-title">${escapeHtml(cartaoInfo.cartao)}</div>
+                ${montarMetaCartao("Vencimento", infoCartao.vencimento)}
+                <div class="pie-card-total">${totalFormatado}</div>
+                ${montarMetaCartao("Melhor Compra", infoCartao.melhorCompra)}
+            </div>
+        `;
+    }
+
+    return `
+        <div class="pie-card-header">
+            <div class="pie-card-title">${escapeHtml(cartaoInfo.cartao)}</div>
+            <div class="pie-card-total">${totalFormatado}</div>
+        </div>
+    `;
+}
+
 function montarLabelsPercentuaisPizza(categoriasLista, total, tamanho = 168){
     if(!categoriasLista.length || total <= 0) return "";
 
@@ -1049,22 +1076,10 @@ function montarLabelsPercentuaisPizza(categoriasLista, total, tamanho = 168){
 }
 
 function montarCardPizza(cartaoInfo, extraClass = "", mostrarPercentualNoGrafico = false){
-    const infoCartao = obterInformacoesCartao(cartaoInfo.cartao);
-    const detalhesCartao = infoCartao && !extraClass.includes("summary-card")
-        ? `
-            ${montarMetaCartao("Vencimento", infoCartao.vencimento)}
-            ${montarMetaCartao("Melhor Compra", infoCartao.melhorCompra)}
-        `
-        : "";
-
     if(!cartaoInfo.categorias.length){
         return `
             <article class="pie-card ${extraClass}">
-                <div class="pie-card-header">
-                    <div class="pie-card-title">${escapeHtml(cartaoInfo.cartao)}</div>
-                    <div class="pie-card-total">${formatarMoeda(0)}</div>
-                    ${detalhesCartao}
-                </div>
+                ${montarCabecalhoCardPizza(cartaoInfo, formatarMoeda(0), extraClass)}
                 <div class="pie-chart-wrap">
                     <div class="pie-chart-empty">Sem gastos no per&iacute;odo selecionado</div>
                 </div>
@@ -1089,11 +1104,7 @@ function montarCardPizza(cartaoInfo, extraClass = "", mostrarPercentualNoGrafico
 
     return `
         <article class="pie-card ${extraClass}">
-            <div class="pie-card-header">
-                <div class="pie-card-title">${escapeHtml(cartaoInfo.cartao)}</div>
-                <div class="pie-card-total">${formatarMoeda(cartaoInfo.total)}</div>
-                ${detalhesCartao}
-            </div>
+            ${montarCabecalhoCardPizza(cartaoInfo, formatarMoeda(cartaoInfo.total), extraClass)}
             <div class="pie-chart-wrap">
                 <div class="pie-chart" style="background: ${montarGradientePizza(cartaoInfo.categorias)};">
                     ${labelsPercentuais}
