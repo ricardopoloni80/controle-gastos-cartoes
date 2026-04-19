@@ -735,13 +735,14 @@ button:active {
     gap: 16px;
     align-items: start;
     min-height: 138px;
-    padding: 18px 4px 0;
+    padding: 8px 4px 0;
 }
 
 .chart-bar-label-wrap {
     position: relative;
     height: 120px;
     overflow: visible;
+    clip-path: inset(0 -120px -120px -120px);
 }
 
 .chart-bar-label {

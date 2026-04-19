@@ -61,12 +61,12 @@ const informacoesCartoes = {
         melhorCompra: "14"
     },
     "carrefour": {
-        vencimento: "--",
-        melhorCompra: "--"
+        vencimento: "03",
+        melhorCompra: "27"
     },
     "porto": {
-        vencimento: "--",
-        melhorCompra: "--"
+        vencimento: "11",
+        melhorCompra: "05"
     },
     "itau": {
         vencimento: "--",
