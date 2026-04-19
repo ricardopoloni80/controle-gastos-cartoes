@@ -734,21 +734,21 @@ button:active {
     grid-auto-columns: minmax(92px, 92px);
     gap: 16px;
     align-items: start;
-    min-height: 138px;
-    padding: 8px 4px 0;
+    height: 148px;
+    padding: 0 4px 0;
+    overflow: hidden;
 }
 
 .chart-bar-label-wrap {
     position: relative;
-    height: 120px;
-    overflow: visible;
-    clip-path: inset(0 -120px -120px -120px);
+    height: 148px;
+    overflow: hidden;
 }
 
 .chart-bar-label {
     position: absolute;
     left: 50%;
-    top: 0;
+    top: 10px;
     width: 110px;
     transform: translateX(-50%) rotate(-45deg);
     transform-origin: top left;

@@ -55,7 +55,7 @@ const coresCartoes = [
     "#64748b"
 ];
 
-const informacoesCartoes = {
+let informacoesCartoes = {
     "c6 bank": {
         vencimento: "20",
         melhorCompra: "14"
@@ -158,6 +158,7 @@ function montarEstadoParaPersistencia(){
         dados,
         cartoes,
         categorias,
+        informacoesCartoes,
         preferencias: {
             mesAtual,
             anoAtual
@@ -174,6 +175,9 @@ function aplicarEstadoRemoto(estado){
     dados = estado?.dados && typeof estado.dados === "object" ? estado.dados : {};
     cartoes = obterListaUnica([...cartoesPadrao, ...cartoesRemotos], "cartao");
     categorias = obterListaUnica([...categoriasPadrao, ...categoriasRemotas], "categoria");
+    informacoesCartoes = estado?.informacoesCartoes && typeof estado.informacoesCartoes === "object"
+        ? { ...informacoesCartoes, ...estado.informacoesCartoes }
+        : informacoesCartoes;
     anoAtual = String(estado?.preferencias?.anoAtual || definirAnoInicial());
     mesAtual = normalizarMes(estado?.preferencias?.mesAtual);
 }
@@ -410,6 +414,33 @@ async function cadastrarNovoItem(tipo){
         : nomeNormalizado;
 
     if(!existe) {
+        if(tipo === "cartao") {
+            const vencimento = window.prompt("Digite o vencimento do cartão (ex.: 20):");
+            if(vencimento === null) {
+                document.getElementById(configuracao.selectId).value = "";
+                return;
+            }
+
+            const melhorCompra = window.prompt("Digite a melhor data de compra do cartão (ex.: 14):");
+            if(melhorCompra === null) {
+                document.getElementById(configuracao.selectId).value = "";
+                return;
+            }
+
+            const vencimentoTratado = vencimento.trim();
+            const melhorCompraTratada = melhorCompra.trim();
+
+            if(!vencimentoTratado || !melhorCompraTratada) {
+                document.getElementById(configuracao.selectId).value = "";
+                return;
+            }
+
+            informacoesCartoes[normalizarChaveLista(nomeFinal)] = {
+                vencimento: vencimentoTratado,
+                melhorCompra: melhorCompraTratada
+            };
+        }
+
         configuracao.lista.push(nomeFinal);
         if(tipo === "cartao") {
             cartoes = obterListaUnica(configuracao.lista, "cartao");
@@ -1585,5 +1616,4 @@ inicializarAutenticacao().catch((error) => {
     console.error("Erro ao inicializar autenticação:", error);
     processarUsuarioDeslogado();
 });
-
 
