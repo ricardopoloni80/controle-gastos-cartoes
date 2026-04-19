@@ -662,15 +662,15 @@ button:active {
 .chart-plot {
     position: relative;
     display: grid;
-    grid-template-rows: 276px 138px;
+    grid-template-rows: 276px 172px;
     row-gap: 0;
     min-width: max-content;
-    min-height: 414px;
+    min-height: 448px;
 }
 
 .chart-grid {
     position: absolute;
-    inset: 26px 0 138px 0;
+    inset: 26px 0 172px 0;
     display: grid;
     grid-template-rows: repeat(5, 1fr);
 }
@@ -734,23 +734,23 @@ button:active {
     grid-auto-columns: minmax(92px, 92px);
     gap: 16px;
     align-items: start;
-    height: 148px;
-    padding: 0 4px 0;
-    overflow: hidden;
+    min-height: 172px;
+    padding: 12px 4px 0;
+    overflow: visible;
 }
 
 .chart-bar-label-wrap {
     position: relative;
-    height: 148px;
-    overflow: hidden;
+    height: 160px;
+    overflow: visible;
 }
 
 .chart-bar-label {
     position: absolute;
     left: 50%;
-    top: 10px;
-    width: 110px;
-    transform: translateX(-50%) rotate(-45deg);
+    top: 8px;
+    width: 132px;
+    transform: translateX(-12%) rotate(-32deg);
     transform-origin: top left;
     color: var(--text-soft);
     font-size: 0.82rem;
@@ -1342,6 +1342,7 @@ tbody tr:hover td {
     .chart-labels {
         gap: 12px;
         grid-auto-columns: minmax(82px, 82px);
+        min-height: 172px;
     }
 
     .pie-card-header {
