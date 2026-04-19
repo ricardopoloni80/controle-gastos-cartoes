@@ -59,6 +59,18 @@ const informacoesCartoes = {
     "c6 bank": {
         vencimento: "20",
         melhorCompra: "14"
+    },
+    "carrefour": {
+        vencimento: "--",
+        melhorCompra: "--"
+    },
+    "porto": {
+        vencimento: "--",
+        melhorCompra: "--"
+    },
+    "itau": {
+        vencimento: "--",
+        melhorCompra: "--"
     }
 };
 
@@ -1025,7 +1037,10 @@ function formatarPercentual(valor){
 }
 
 function obterInformacoesCartao(nomeCartao){
-    return informacoesCartoes[normalizarChaveLista(nomeCartao)] || null;
+    return informacoesCartoes[normalizarChaveLista(nomeCartao)] || {
+        vencimento: "--",
+        melhorCompra: "--"
+    };
 }
 
 function montarMetaCartao(rotulo, valor){
@@ -1034,24 +1049,25 @@ function montarMetaCartao(rotulo, valor){
 }
 
 function montarCabecalhoCardPizza(cartaoInfo, totalFormatado, extraClass = ""){
-    const infoCartao = obterInformacoesCartao(cartaoInfo.cartao);
     const isResumo = extraClass.includes("summary-card");
 
-    if(infoCartao && !isResumo){
+    if(isResumo){
         return `
-            <div class="pie-card-header pie-card-header-detailed">
-                <div class="pie-card-title">${escapeHtml(cartaoInfo.cartao)}</div>
-                ${montarMetaCartao("Vencimento", infoCartao.vencimento)}
+            <div class="pie-card-header pie-card-header-summary">
+                <div class="pie-card-title">Total</div>
                 <div class="pie-card-total">${totalFormatado}</div>
-                ${montarMetaCartao("Melhor Compra", infoCartao.melhorCompra)}
             </div>
         `;
     }
 
+    const infoCartao = obterInformacoesCartao(cartaoInfo.cartao);
+
     return `
-        <div class="pie-card-header">
+        <div class="pie-card-header pie-card-header-detailed">
             <div class="pie-card-title">${escapeHtml(cartaoInfo.cartao)}</div>
+            ${montarMetaCartao("Vencimento", infoCartao.vencimento)}
             <div class="pie-card-total">${totalFormatado}</div>
+            ${montarMetaCartao("Melhor Compra", infoCartao.melhorCompra)}
         </div>
     `;
 }
