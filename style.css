@@ -748,15 +748,15 @@ button:active {
 .chart-bar-label {
     position: absolute;
     left: 50%;
-    top: 8px;
+    top: 12px;
     width: 132px;
-    transform: translateX(-12%) rotate(-32deg);
-    transform-origin: top left;
+    transform: translateX(-50%) rotate(-32deg);
+    transform-origin: center top;
     color: var(--text-soft);
     font-size: 0.82rem;
     font-weight: 700;
     line-height: 1.35;
-    text-align: left;
+    text-align: center;
     word-break: break-word;
     white-space: normal;
 }
