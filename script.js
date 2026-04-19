@@ -55,6 +55,13 @@ const coresCartoes = [
     "#64748b"
 ];
 
+const informacoesCartoes = {
+    "c6 bank": {
+        vencimento: "20",
+        melhorCompra: "14"
+    }
+};
+
 function gerarIdSerie(){
     return `serie-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -1013,6 +1020,15 @@ function formatarPercentual(valor){
     return `${valor.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 }
 
+function obterInformacoesCartao(nomeCartao){
+    return informacoesCartoes[normalizarChaveLista(nomeCartao)] || null;
+}
+
+function montarMetaCartao(rotulo, valor){
+    if(!valor) return "";
+    return `<div class="pie-card-meta"><strong>${rotulo}:</strong> ${escapeHtml(valor)}</div>`;
+}
+
 function montarLabelsPercentuaisPizza(categoriasLista, total, tamanho = 168){
     if(!categoriasLista.length || total <= 0) return "";
 
@@ -1033,12 +1049,21 @@ function montarLabelsPercentuaisPizza(categoriasLista, total, tamanho = 168){
 }
 
 function montarCardPizza(cartaoInfo, extraClass = "", mostrarPercentualNoGrafico = false){
+    const infoCartao = obterInformacoesCartao(cartaoInfo.cartao);
+    const detalhesCartao = infoCartao && !extraClass.includes("summary-card")
+        ? `
+            ${montarMetaCartao("Vencimento", infoCartao.vencimento)}
+            ${montarMetaCartao("Melhor Compra", infoCartao.melhorCompra)}
+        `
+        : "";
+
     if(!cartaoInfo.categorias.length){
         return `
             <article class="pie-card ${extraClass}">
                 <div class="pie-card-header">
                     <div class="pie-card-title">${escapeHtml(cartaoInfo.cartao)}</div>
                     <div class="pie-card-total">${formatarMoeda(0)}</div>
+                    ${detalhesCartao}
                 </div>
                 <div class="pie-chart-wrap">
                     <div class="pie-chart-empty">Sem gastos no per&iacute;odo selecionado</div>
@@ -1067,6 +1092,7 @@ function montarCardPizza(cartaoInfo, extraClass = "", mostrarPercentualNoGrafico
             <div class="pie-card-header">
                 <div class="pie-card-title">${escapeHtml(cartaoInfo.cartao)}</div>
                 <div class="pie-card-total">${formatarMoeda(cartaoInfo.total)}</div>
+                ${detalhesCartao}
             </div>
             <div class="pie-chart-wrap">
                 <div class="pie-chart" style="background: ${montarGradientePizza(cartaoInfo.categorias)};">

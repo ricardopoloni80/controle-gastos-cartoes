@@ -636,8 +636,8 @@ button:active {
 
 .chart-area {
     display: grid;
-    align-items: end;
-    min-height: 340px;
+    align-items: start;
+    min-height: 380px;
     overflow-x: auto;
     overflow-y: hidden;
     padding-bottom: 8px;
@@ -646,7 +646,7 @@ button:active {
 .bar-chart {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    min-height: 320px;
+    min-height: 360px;
     min-width: max-content;
 }
 
@@ -661,15 +661,16 @@ button:active {
 
 .chart-plot {
     position: relative;
-    display: grid;
-    grid-template-rows: 276px auto;
-    gap: 18px;
+    display: block;
+    min-width: max-content;
+    padding-bottom: 138px;
+    min-height: 414px;
     min-width: max-content;
 }
 
 .chart-grid {
     position: absolute;
-    inset: 26px 0 114px 0;
+    inset: 26px 0 138px 0;
     display: grid;
     grid-template-rows: repeat(5, 1fr);
 }
@@ -686,14 +687,14 @@ button:active {
     grid-auto-columns: minmax(92px, 92px);
     align-items: end;
     gap: 16px;
-    height: 276px;
+    min-height: 276px;
     padding: 26px 4px 0;
     border-bottom: 2px solid rgba(79, 70, 229, 0.18);
 }
 
 .chart-bar-group {
     display: grid;
-    grid-template-rows: 220px 112px;
+    grid-template-rows: 220px 124px;
     gap: 0;
     align-items: end;
 }
@@ -728,15 +729,15 @@ button:active {
 
 .chart-bar-label-wrap {
     position: relative;
-    height: 112px;
-    padding-top: 22px;
+    height: 124px;
+    padding-top: 28px;
     overflow: visible;
 }
 
 .chart-bar-label {
     position: absolute;
     left: 50%;
-    top: 22px;
+    top: 28px;
     width: 110px;
     transform: translateX(-50%) rotate(-45deg);
     transform-origin: top left;
@@ -787,19 +788,34 @@ button:active {
 
 .pie-card-header {
     display: grid;
-    gap: 4px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 16px;
+    align-items: start;
 }
 
 .pie-card-title {
     font-size: 1rem;
     font-weight: 800;
     color: var(--text-main);
+    min-width: 0;
 }
 
 .pie-card-total {
     color: var(--text-soft);
     font-size: 0.9rem;
     font-weight: 700;
+}
+
+.pie-card-meta {
+    color: var(--text-soft);
+    font-size: 0.86rem;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.pie-card-meta strong {
+    color: var(--text-main);
+    font-weight: 800;
 }
 
 .pie-chart-wrap {
@@ -1284,6 +1300,15 @@ tbody tr:hover td {
     .chart-bars {
         gap: 12px;
         grid-auto-columns: minmax(82px, 82px);
+    }
+
+    .pie-card-header {
+        grid-template-columns: 1fr;
+    }
+
+    .pie-card-meta {
+        text-align: left;
+        white-space: normal;
     }
 
     .tab {
