@@ -3,6 +3,7 @@ const FIREBASE_ROOT_PATH = "controle-gastos-cartoes";
 const NOVO_ITEM_VALUE = "__novo__";
 const LISTAS_VERSAO_ATUAL = "sem-padroes-2026-04-01";
 const AUTH_REDIRECT_KEY = "controle-gastos-cartoes:auth-redirect";
+const PAINEIS_STORAGE_KEY = "controle-gastos-cartoes:paineis";
 
 const cartoesPadrao = [];
 const categoriasPadrao = [];
@@ -537,17 +538,58 @@ function fecharFiltros(){
     });
 }
 
+function lerEstadoPaineis(){
+    try {
+        const valorSalvo = localStorage.getItem(PAINEIS_STORAGE_KEY);
+        const estado = JSON.parse(valorSalvo || "{}");
+        return estado && typeof estado === "object" ? estado : {};
+    } catch (error) {
+        console.warn("Não foi possível ler o estado dos painéis:", error);
+        return {};
+    }
+}
+
+function salvarEstadoPainel(painelId, recolhido){
+    try {
+        const estadoAtual = lerEstadoPaineis();
+        estadoAtual[painelId] = recolhido;
+        localStorage.setItem(PAINEIS_STORAGE_KEY, JSON.stringify(estadoAtual));
+    } catch (error) {
+        console.warn("Não foi possível salvar o estado do painel:", error);
+    }
+}
+
+function aplicarEstadoPainel(painel, recolhido){
+    if(!painel) return;
+
+    painel.classList.toggle("is-collapsed", recolhido);
+
+    const botao = painel.querySelector(".panel-toggle");
+    if(botao){
+        botao.setAttribute("aria-expanded", recolhido ? "false" : "true");
+    }
+}
+
+function restaurarEstadoPaineis(){
+    const estadosSalvos = lerEstadoPaineis();
+
+    document.querySelectorAll(".collapsible-panel[id]").forEach((painel) => {
+        if(Object.prototype.hasOwnProperty.call(estadosSalvos, painel.id)){
+            aplicarEstadoPainel(painel, Boolean(estadosSalvos[painel.id]));
+            return;
+        }
+
+        aplicarEstadoPainel(painel, painel.classList.contains("is-collapsed"));
+    });
+}
+
 function togglePainel(painelId){
     const painel = document.getElementById(painelId);
     if(!painel) return;
 
     const vaiFechar = !painel.classList.contains("is-collapsed");
-    painel.classList.toggle("is-collapsed", vaiFechar);
-
-    const botao = painel.querySelector(".panel-toggle");
-    if(botao){
-        botao.setAttribute("aria-expanded", vaiFechar ? "false" : "true");
-    }
+    aplicarEstadoPainel(painel, vaiFechar);
+    salvarEstadoPainel(painelId, vaiFechar);
 }
 
 function getLancamentosMes(){
@@ -1308,6 +1350,7 @@ function garantirUIInicializada(){
     carregarAnos();
     inicializarSelectsDinamicos();
     inicializarFiltros();
+    restaurarEstadoPaineis();
     atualizarVisibilidadeTelas();
     atualizarTela();
     appInicializado = true;

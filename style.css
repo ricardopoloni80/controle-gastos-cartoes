@@ -693,7 +693,7 @@ button:active {
 
 .chart-bar-group {
     display: grid;
-    grid-template-rows: 220px 96px;
+    grid-template-rows: 220px 112px;
     gap: 0;
     align-items: end;
 }
@@ -728,15 +728,17 @@ button:active {
 
 .chart-bar-label-wrap {
     position: relative;
-    height: 96px;
+    height: 112px;
+    padding-top: 22px;
+    overflow: visible;
 }
 
 .chart-bar-label {
     position: absolute;
     left: 50%;
-    top: 8px;
+    top: 22px;
     width: 110px;
-    transform: translateX(-8px) rotate(-45deg);
+    transform: translateX(-50%) rotate(-45deg);
     transform-origin: top left;
     color: var(--text-soft);
     font-size: 0.82rem;
