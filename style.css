@@ -1312,7 +1312,7 @@ tbody tr:hover td {
     }
 
     .section-actions .panel-toggle {
-        align-self: flex-end;
+        align-self: flex-start;
     }
 
     .header-side {
