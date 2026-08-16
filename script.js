@@ -1048,11 +1048,14 @@ function renderizarGraficoCategorias(){
 
     const barras = dadosGrafico.map((item) => {
         const altura = maiorValor > 0 ? (item.total / maiorValor) * 100 : 0;
+        const valorFormatado = formatarMoeda(item.total);
 
         return `
             <div class="chart-bar-group">
                 <div class="chart-bar-wrap">
-                    <div class="chart-bar" style="height: ${altura}%;"></div>
+                    <div class="chart-bar" style="height: ${altura}%;" title="${escapeHtml(item.categoria)}: ${valorFormatado}" aria-label="${escapeHtml(item.categoria)}: ${valorFormatado}">
+                        <span class="chart-bar-value">${valorFormatado}</span>
+                    </div>
                 </div>
             </div>
         `;

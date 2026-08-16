@@ -745,7 +745,6 @@ button:active {
 
 .chart-bar {
     width: min(64px, 100%);
-    min-height: 10px;
     border-radius: 14px 14px 0 0;
     background: linear-gradient(180deg, #4f46e5 0%, #0ea5e9 100%);
     box-shadow: 0 14px 28px rgba(79, 70, 229, 0.22);
@@ -761,6 +760,10 @@ button:active {
     font-size: 0.78rem;
     font-weight: 800;
     white-space: nowrap;
+    padding: 3px 6px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 4px 10px rgba(30, 41, 59, 0.1);
 }
 
 .chart-labels {
