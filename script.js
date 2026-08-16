@@ -883,12 +883,16 @@ function obterReferenciasParaEdicao(referenciasSerie, referenciaAtual, modo){
 }
 
 function atualizarEstadoFiltrosVisuais(){
+    const filtrosAtivos = Object.values(filtros).some((valor) => Boolean(String(valor || "").trim()));
+
     document.querySelectorAll(".filter-toggle").forEach((botao) => {
         const chave = botao.dataset.filterKey;
         const ativo = Boolean(String(filtros[chave] || "").trim());
         botao.classList.toggle("is-active", ativo);
         botao.setAttribute("aria-pressed", ativo ? "true" : "false");
     });
+
+    document.getElementById("limparFiltros").disabled = !filtrosAtivos;
 }
 
 function getLancamentosFiltrados(){
