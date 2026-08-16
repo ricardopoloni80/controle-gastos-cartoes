@@ -21,6 +21,7 @@ let usuarioLogado = null;
 let appInicializado = false;
 let unsubscribeDados = null;
 let autenticacaoManualPendente = false;
+let lancamentosSelecionados = new Set();
 
 const filtros = {
     descricao: "",
@@ -487,6 +488,7 @@ function carregarAnos(){
     selectAno.value = anoAtual;
     selectAno.addEventListener("change", (event) => {
         anoAtual = event.target.value;
+        limparSelecao(false);
         salvarEstado().catch((error) => {
             console.error("Erro ao salvar o ano atual no Firebase:", error);
         });
@@ -506,6 +508,7 @@ function criarAbas(){
         aba.textContent = mes;
         aba.onclick = () => {
             mesAtual = index;
+            limparSelecao(false);
             salvarEstado().catch((error) => {
                 console.error("Erro ao salvar o mês atual no Firebase:", error);
             });
@@ -567,6 +570,35 @@ function inicializarFiltros(){
             fecharMenuUsuario();
         }
     });
+}
+
+function limparFiltros(){
+    filtros.descricao = "";
+    filtros.cartao = "";
+    filtros.categoria = "";
+    filtros.valor = "";
+    editandoIndex = null;
+    document.getElementById("filtroDescricao").value = "";
+    document.getElementById("filtroCartao").value = "";
+    document.getElementById("filtroCategoria").value = "";
+    document.getElementById("filtroValor").value = "";
+    fecharFiltros();
+    atualizarTela();
+}
+
+function limparSelecao(atualizar = true){
+    lancamentosSelecionados.clear();
+    if(atualizar) atualizarTela();
+}
+
+function alternarSelecaoLancamento(index){
+    if(lancamentosSelecionados.has(index)) {
+        lancamentosSelecionados.delete(index);
+    } else {
+        lancamentosSelecionados.add(index);
+    }
+
+    atualizarTela();
 }
 
 function toggleFiltro(nome){
@@ -1259,16 +1291,16 @@ function renderLinhaEdicao(gasto){
 }
 
 function renderLinhaVisual(gasto){
+    const selecionado = lancamentosSelecionados.has(gasto.originalIndex);
+
     return `
-        <tr>
-            <td>
-                <button class="description-button" type="button" onclick="iniciarEdicao(${gasto.originalIndex})" title="Editar descrição">
-                    ${escapeHtml(gasto.descricao)}
-                </button>
+        <tr class="selectable-row${selecionado ? " is-selected" : ""}">
+            <td class="selectable-cell" onclick="alternarSelecaoLancamento(${gasto.originalIndex})" title="Selecionar lançamento para somar">
+                <span class="description-button">${escapeHtml(gasto.descricao)}</span>
             </td>
-            <td>${escapeHtml(gasto.cartao)}</td>
+            <td class="selectable-cell" onclick="alternarSelecaoLancamento(${gasto.originalIndex})" title="Selecionar lançamento para somar">${escapeHtml(gasto.cartao)}</td>
             <td>${escapeHtml(gasto.categoria)}</td>
-            <td>${formatarMoeda(gasto.valor)}</td>
+            <td class="selectable-cell" onclick="alternarSelecaoLancamento(${gasto.originalIndex})" title="Selecionar lançamento para somar">${formatarMoeda(gasto.valor)}</td>
             <td class="actions-cell">
                 <div class="action-buttons">
                     <button class="icon-button edit-button" onclick="iniciarEdicao(${gasto.originalIndex})" title="Editar lançamento" aria-label="Editar lançamento">&#9998;</button>
@@ -1287,8 +1319,17 @@ function atualizarTela(){
     const lista = document.getElementById("lista");
     lista.innerHTML = "";
 
+    const lancamentosMes = getLancamentosMes().map((gasto, index) => ({ ...gasto, originalIndex: index }));
+    const indicesValidos = new Set(lancamentosMes.map((gasto) => gasto.originalIndex));
+    lancamentosSelecionados.forEach((index) => {
+        if(!indicesValidos.has(index)) lancamentosSelecionados.delete(index);
+    });
+
     const lancamentosFiltrados = getLancamentosFiltrados();
-    const total = lancamentosFiltrados.reduce((acumulado, gasto) => acumulado + gasto.valor, 0);
+    const itensSelecionados = lancamentosMes.filter((gasto) => lancamentosSelecionados.has(gasto.originalIndex));
+    const exibindoSelecao = itensSelecionados.length > 0;
+    const total = (exibindoSelecao ? itensSelecionados : lancamentosFiltrados)
+        .reduce((acumulado, gasto) => acumulado + gasto.valor, 0);
 
     if(lancamentosFiltrados.length === 0){
         lista.innerHTML = `
@@ -1305,7 +1346,11 @@ function atualizarTela(){
     }
 
     atualizarEstadoFiltrosVisuais();
+    document.getElementById("totalLabel").innerText = exibindoSelecao
+        ? `Total selecionado (${itensSelecionados.length})`
+        : "Total do mês";
     document.getElementById("total").innerText = formatarMoeda(total);
+    document.getElementById("limparSelecao").disabled = !exibindoSelecao;
     renderizarGraficoCategorias();
     renderizarGraficosPizzaMensais();
     renderizarGraficosPizzaAnuais();
@@ -1406,6 +1451,7 @@ async function remover(index){
     });
 
     editandoIndex = null;
+    limparSelecao(false);
     await salvarEstado();
     atualizarTela();
 }
@@ -1616,4 +1662,3 @@ inicializarAutenticacao().catch((error) => {
     console.error("Erro ao inicializar autenticação:", error);
     processarUsuarioDeslogado();
 });
-

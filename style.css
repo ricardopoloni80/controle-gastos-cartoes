@@ -587,6 +587,40 @@ button:active {
     gap: 12px;
 }
 
+.lancamentos-controls {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.table-control-button {
+    min-height: 40px;
+    padding: 0 14px;
+    border: 1px solid rgba(79, 70, 229, 0.2);
+    border-radius: 12px;
+    background: rgba(79, 70, 229, 0.08);
+    color: var(--primary-strong);
+    font-size: 0.84rem;
+    box-shadow: none;
+}
+
+.table-control-button:hover {
+    background: rgba(79, 70, 229, 0.14);
+    box-shadow: none;
+    filter: none;
+}
+
+.table-control-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.table-control-button:disabled:hover {
+    transform: none;
+    background: rgba(79, 70, 229, 0.08);
+}
+
 .panel-toggle {
     display: inline-flex;
     align-items: center;
@@ -1115,23 +1149,25 @@ tbody td {
 }
 
 .description-button {
-    min-height: auto;
+    display: inline-block;
     width: 100%;
     padding: 0;
-    border: 0;
-    background: transparent;
     color: var(--text-main);
     font: inherit;
     font-weight: 700;
     text-align: center;
-    box-shadow: none;
 }
 
-.description-button:hover {
-    transform: none;
-    filter: none;
-    box-shadow: none;
-    color: var(--primary-strong);
+.selectable-cell {
+    cursor: pointer;
+}
+
+.selectable-row.is-selected td {
+    background: rgba(199, 210, 254, 0.78);
+}
+
+.selectable-row.is-selected:hover td {
+    background: rgba(165, 180, 252, 0.72);
 }
 
 tbody tr:nth-child(even) td {
@@ -1259,6 +1295,10 @@ tbody tr:hover td {
 
     .section-actions {
         justify-content: space-between;
+    }
+
+    .lancamentos-controls {
+        justify-content: flex-start;
     }
 
     .header-side {
