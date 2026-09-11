@@ -253,10 +253,10 @@
     };
 
     firebase.initializeApp(firebaseConfig);
-    // Ativa o App Check com reCAPTCHA v3
+    // Ativa o App Check usando o provedor Enterprise
     const appCheck = firebase.appCheck();
     appCheck.activate(
-        new firebase.appCheck.ReCaptchaV3Provider('6LcdxLYtAAAAAFzzXB5MfCQSEJvTe6dOM9AfGFU5'),
+        new firebase.appCheck.ReCaptchaEnterpriseProvider('6LcdxLYtAAAAAFzzXB5MfCQSEJvTe6dOM9AfGFU5'),
         true
     );
     const db = firebase.database();
