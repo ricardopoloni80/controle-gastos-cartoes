@@ -54,10 +54,8 @@
             </div>
         </section>
 
-        <div class="surface-card sync-panel">
-            <p id="statusSincronizacao" role="status" aria-live="polite">Carregando seus dados do Firebase…</p>
-            <button type="button" onclick="inicializarApp()">Recarregar dados</button>
-        </div>
+        <p id="statusSincronizacao" class="sync-notice" role="status" aria-live="polite" hidden></p>
+        <p id="erroOperacao" role="alert" hidden></p>
 
         <section class="surface-card months-panel">
             <div class="section-heading">
@@ -80,12 +78,13 @@
 
                 <select id="categoria" required></select>
 
-                <input type="number" id="valor" placeholder="Valor">
+                <input type="number" id="valor" placeholder="Valor" min="0.01" step="0.01">
 
-                <input type="number" id="parcelas" placeholder="Nr. de Parcelas" min="1">
+                <input type="number" id="parcelas" placeholder="Nr. de Parcelas" min="1" max="120" step="1">
 
-                <button onclick="adicionarGasto()">Adicionar</button>
+                <button type="button" onclick="executarAcao(() => adicionarGasto())">Adicionar</button>
             </div>
+            <div id="lancamentosPendentes" aria-live="polite" hidden></div>
         </section>
 
         <section class="surface-card table-panel collapsible-panel" id="painelLancamentos">

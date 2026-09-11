@@ -7,8 +7,6 @@ const PAINEIS_STORAGE_KEY = "controle-gastos-cartoes:paineis";
 
 const cartoesPadrao = [];
 const categoriasPadrao = [];
-const cartoesBloqueados = ["Nubank"];
-const categoriasBloqueadas = ["Laazer", "Outros"];
 
 let dados = {};
 let cartoes = obterListaUnica(cartoesPadrao, "cartao");
@@ -21,6 +19,15 @@ let usuarioLogado = null;
 let appInicializado = false;
 let unsubscribeDados = null;
 let sessaoDados = 0;
+let estadoConfirmado = null;
+let conectado = false;
+let gravacaoEmAndamento = false;
+let temEstadoCarregado = false;
+let erroSincronizacao = false;
+let estadoAdiado;
+let envioFila = null;
+let timerFila = null;
+let timerReconexao = null;
 let autenticacaoManualPendente = false;
 let lancamentosSelecionados = new Set();
 
@@ -78,6 +85,7 @@ let informacoesCartoes = {
 const informacoesCartoesIniciais = JSON.parse(JSON.stringify(informacoesCartoes));
 
 function gerarIdSerie(){
+    if(typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return `serie-${crypto.randomUUID()}`;
     return `serie-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
@@ -106,7 +114,7 @@ function normalizarItemLista(tipo, valor){
             "porto": "Porto"
         };
 
-        return mapaCartoes[chave] || texto;
+        return Object.hasOwn(mapaCartoes, chave) ? mapaCartoes[chave] : texto;
     }
 
     const mapaCategorias = {
@@ -115,12 +123,7 @@ function normalizarItemLista(tipo, valor){
         "lazer": "Lazer"
     };
 
-    return mapaCategorias[chave] || texto;
-}
-
-function itemBloqueado(tipo, valor){
-    const listaBloqueada = tipo === "cartao" ? cartoesBloqueados : categoriasBloqueadas;
-    return listaBloqueada.some((item) => normalizarChaveLista(item) === normalizarChaveLista(valor));
+    return Object.hasOwn(mapaCategorias, chave) ? mapaCategorias[chave] : texto;
 }
 
 function definirAnoInicial(){
@@ -142,7 +145,6 @@ function obterListaUnica(lista, tipo){
     (lista || []).forEach((item) => {
         const valorNormalizado = normalizarItemLista(tipo, item);
         if(!valorNormalizado) return;
-        if(itemBloqueado(tipo, valorNormalizado)) return;
 
         const chave = normalizarChaveLista(valorNormalizado);
         if(!mapa.has(chave)) mapa.set(chave, valorNormalizado);
@@ -170,7 +172,7 @@ function montarEstadoParaPersistencia(){
     };
 }
 
-function aplicarEstadoRemoto(estado){
+function validarEstadoRemoto(estado){
     if(estado !== null && estado !== undefined){
         const campos = ["dados", "cartoes", "categorias", "informacoesCartoes", "preferencias", "listasVersao"];
         if(typeof estado !== "object" || Array.isArray(estado) ||
@@ -178,32 +180,53 @@ function aplicarEstadoRemoto(estado){
             throw new Error("Formato de dados não reconhecido. Verifique o cadastro no Firebase.");
         }
         if(estado.dados !== undefined && estado.dados !== null){
-            if(typeof estado.dados !== "object" || Object.values(estado.dados).some((ano) =>
-                !ano || typeof ano !== "object" || Object.values(ano).some((mes) =>
-                    mes !== null && (!Array.isArray(mes) || mes.some((item) =>
-                        !item || typeof item !== "object" || typeof item.valor !== "number"))))){
-                throw new Error("Formato dos lançamentos não reconhecido. Os dados não serão sobrescritos.");
+            if(typeof estado.dados !== "object") throw new Error("Formato dos lançamentos não reconhecido.");
+            for(const [chaveAno, ano] of Object.entries(estado.dados)){
+                if(!/^\d{4}$/.test(chaveAno) || !ano || typeof ano !== "object") throw new Error("Ano dos lançamentos inválido.");
+                for(const [chaveMes, mes] of Object.entries(ano)){
+                    if(!/^(0|[1-9]|10|11)$/.test(chaveMes)) throw new Error("Mês dos lançamentos inválido.");
+                    if(mes === null) continue;
+                    if(!Array.isArray(mes) || mes.some((item) => !item || typeof item !== "object" ||
+                        !Number.isFinite(item.valor) || !["descricao", "cartao", "categoria"].every((campo) => typeof item[campo] === "string"))){
+                        throw new Error("Formato dos lançamentos não reconhecido. Os dados não serão sobrescritos.");
+                    }
+                }
+            }
+        }
+        for(const campo of ["cartoes", "categorias"]){
+            if(estado[campo] != null && (!Array.isArray(estado[campo]) || estado[campo].some((item) => typeof item !== "string"))){
+                throw new Error(`Formato de ${campo} não reconhecido. Os dados não serão sobrescritos.`);
             }
         }
     }
+}
+
+function aplicarEstadoRemoto(estado, manterPeriodo = false){
+    validarEstadoRemoto(estado);
     const cartoesRemotos = Array.isArray(estado?.cartoes) ? estado.cartoes : [];
     const categoriasRemotas = Array.isArray(estado?.categorias) ? estado.categorias : [];
 
-    dados = estado?.dados && typeof estado.dados === "object" ? estado.dados : {};
+    dados = copiarEstado(estado?.dados || {});
     cartoes = obterListaUnica([...cartoesPadrao, ...cartoesRemotos], "cartao");
     categorias = obterListaUnica([...categoriasPadrao, ...categoriasRemotas], "categoria");
     informacoesCartoes = estado?.informacoesCartoes && typeof estado.informacoesCartoes === "object"
         ? { ...informacoesCartoesIniciais, ...estado.informacoesCartoes }
         : { ...informacoesCartoesIniciais };
-    anoAtual = String(estado?.preferencias?.anoAtual || definirAnoInicial());
-    mesAtual = normalizarMes(estado?.preferencias?.mesAtual);
+    if(!manterPeriodo){
+        anoAtual = String(estado?.preferencias?.anoAtual || definirAnoInicial());
+        mesAtual = normalizarMes(estado?.preferencias?.mesAtual);
+    }
     sincronizarListasComDados();
 }
 
 function exigirEstadoPronto(){
+    if(gravacaoEmAndamento) throw new Error("Uma gravação está em andamento. Aguarde a confirmação do Firebase.");
     if(!usuarioLogado || !estadoPronto){
         throw new Error("Aguarde o carregamento dos dados do Firebase antes de fazer alterações.");
     }
+    if(!conectado) throw new Error("Sem conexão com o Firebase. Os dados não foram enviados; mantenha os campos preenchidos e tente novamente quando a conexão voltar.");
+    if(erroSincronizacao) throw new Error("Aguardando a recuperação da sincronização. A tentativa anterior permanece no cache.");
+    if(envioFila) throw new Error("Aguarde o envio dos lançamentos pendentes antes de editar ou excluir registros.");
 }
 
 function mostrarStatusSincronizacao(mensagem, erro = false){
@@ -211,8 +234,203 @@ function mostrarStatusSincronizacao(mensagem, erro = false){
     if(status){
         status.textContent = mensagem;
         status.classList.toggle("sync-error", erro);
+        status.hidden = !erro;
     }
-    document.getElementById("appShell")?.classList.toggle("dados-indisponiveis", !estadoPronto);
+    document.getElementById("appShell")?.classList.toggle("dados-indisponiveis", !temEstadoCarregado);
+}
+
+function informarErro(error){
+    console.error("Operação interrompida:", error);
+    const painel = document.getElementById("erroOperacao");
+    if(painel){
+        painel.hidden = false;
+        painel.textContent = error.message || String(error);
+        painel.scrollIntoView?.({ block: "nearest" });
+    }
+}
+
+async function executarAcao(acao){
+    try { await acao(); } catch(error){ informarErro(error); }
+}
+
+function copiarEstado(estado){ return JSON.parse(JSON.stringify(estado)); }
+
+// Firebase omite nós vazios e pode representar arrays como objetos de índices.
+function assinaturaEstado(estado){
+    function normalizar(valor){
+        if(valor === null || valor === undefined) return null;
+        if(typeof valor !== "object") return valor;
+        const pares = Object.keys(valor).sort().map((chave) => [chave, normalizar(valor[chave])])
+            .filter(([, item]) => item !== null);
+        return pares.length ? Object.fromEntries(pares) : null;
+    }
+    const { dados, cartoes, categorias, informacoesCartoes, listasVersao } = estado || {};
+    return JSON.stringify(normalizar({ dados, cartoes, categorias, informacoesCartoes, listasVersao }));
+}
+
+function bloquearInteracao(bloquear){
+    document.querySelectorAll("#appShell > section").forEach((secao) => { secao.inert = bloquear; });
+    document.getElementById("appShell")?.setAttribute("aria-busy", String(bloquear));
+}
+
+function camposFormulario(){
+    return Object.fromEntries(["descricao", "cartao", "categoria", "valor", "parcelas"].map((id) =>
+        [id, document.getElementById(id)?.value || ""]));
+}
+
+function chaveRascunho(){ return `${FIREBASE_ROOT_PATH}:rascunho:${usuarioLogado.uid}`; }
+
+function prefixoFila(uid = usuarioLogado?.uid){
+    if(!uid) throw new Error("Entre com sua conta para acessar os lançamentos pendentes.");
+    return `${FIREBASE_ROOT_PATH}:fila:${uid}:`;
+}
+
+function lerFila(uid = usuarioLogado?.uid){
+    const prefixo = prefixoFila(uid);
+    const fila = [];
+    for(let i = 0; i < localStorage.length; i++){
+        const chave = localStorage.key(i);
+        if(!chave?.startsWith(prefixo)) continue;
+        const item = JSON.parse(localStorage.getItem(chave));
+        if(!item || item.uid !== uid || chave !== prefixo + item.id || !Array.isArray(item.lancamentos) || !item.lancamentos.length){
+            throw new Error("Não foi possível ler um lançamento pendente no cache. Nenhum registro foi apagado.");
+        }
+        item.lancamentos.forEach(({ ano, mes, gasto }) => {
+            if(!Number.isInteger(ano) || ano < 2026 || ano > 2099 || !Number.isInteger(mes) || mes < 0 || mes > 11){
+                throw new Error("Período inválido no cache. O lançamento foi preservado para verificação.");
+            }
+            validarLancamento(gasto?.descricao, gasto?.cartao, gasto?.categoria, gasto?.valor);
+        });
+        fila.push(item);
+    }
+    return fila.sort((a, b) => a.criadoEm.localeCompare(b.criadoEm));
+}
+
+function mostrarPendencias(){
+    const painel = document.getElementById("lancamentosPendentes");
+    if(!painel) return;
+    try {
+        const fila = usuarioLogado ? lerFila().filter((item) => !estadoConfirmado?.operacoesConfirmadas?.[item.id]) : [];
+        painel.hidden = !fila.length;
+        painel.innerHTML = fila.length ? `<strong>${fila.length} lançamento(s) salvo(s) neste aparelho, aguardando sincronização.</strong><ul>${fila.map((item) =>
+            `<li>${escapeHtml(item.descricao)} — ${formatarMoeda(item.total)}${item.erro ? ` — ${escapeHtml(item.erro)}` : ""}</li>`).join("")}</ul>` : "";
+    } catch(error){ informarErro(error); }
+}
+
+function agendarEnvioFila(){
+    window.clearTimeout(timerFila);
+    if(!usuarioLogado) return;
+    try { if(!lerFila().length) return; } catch(error){ informarErro(error); return; }
+    timerFila = window.setTimeout(() => { sincronizarFila().catch(informarErro); }, 30000);
+}
+
+function sincronizarFila(){
+    const uid = usuarioLogado?.uid;
+    if(envioFila?.uid === uid) return envioFila.promise;
+    if(!uid || !conectado || !estadoPronto || erroSincronizacao || gravacaoEmAndamento || editandoIndex !== null) return Promise.resolve();
+    const trabalho = { uid, promise: null };
+    envioFila = trabalho;
+    trabalho.promise = enviarFila(uid).catch((error) => {
+        if(usuarioLogado?.uid === uid) informarErro(error);
+    }).finally(() => {
+        if(envioFila === trabalho) envioFila = null;
+        if(usuarioLogado?.uid === uid){ mostrarPendencias(); agendarEnvioFila(); }
+    });
+    return trabalho.promise;
+}
+
+async function enviarFila(uid){
+    for(const item of lerFila(uid)){
+        if(usuarioLogado?.uid !== uid || !conectado || gravacaoEmAndamento || editandoIndex !== null) return;
+        const ref = db.ref(getCaminhoDadosUsuario(uid));
+        try {
+            // Carrega o estado do servidor antes da transação; nunca restaura o cache sobre o banco.
+            const snapshot = await ref.get();
+            const remoto = snapshot.val();
+            validarEstadoRemoto(remoto);
+            if(remoto === null && item.contaComRegistros) throw new Error("O banco retornou vazio. Aguardando verificação da conta; lançamento preservado no cache.");
+            let erroTransacao;
+            const resultado = await ref.transaction((atual) => {
+                if(usuarioLogado?.uid !== uid) return;
+                try { validarEstadoRemoto(atual); }
+                catch(error){ erroTransacao = error; return; }
+                if(atual?.operacoesConfirmadas?.[item.id]) return atual;
+                if(atual === null && item.contaComRegistros) return;
+                const novo = copiarEstado(atual || {});
+                novo.dados = novo.dados || {};
+                for(const { ano, mes, gasto } of item.lancamentos){
+                    novo.dados[ano] = novo.dados[ano] || {};
+                    novo.dados[ano][mes] = novo.dados[ano][mes] || [];
+                    novo.dados[ano][mes].push(copiarEstado(gasto));
+                }
+                novo.cartoes = obterListaUnica([...(novo.cartoes || []), ...item.lancamentos.map(({ gasto }) => gasto.cartao)], "cartao");
+                novo.categorias = obterListaUnica([...(novo.categorias || []), ...item.lancamentos.map(({ gasto }) => gasto.categoria)], "categoria");
+                novo.operacoesConfirmadas = { ...novo.operacoesConfirmadas, [item.id]: true };
+                return novo;
+            }, undefined, false);
+            if(!resultado.committed) throw erroTransacao || new Error("Sincronização adiada. O lançamento continua no cache.");
+            // A confirmação e as parcelas são gravadas na mesma transação. Repetir não duplica.
+            localStorage.setItem(`${FIREBASE_ROOT_PATH}:confirmado:${uid}:${item.id}`, "1");
+            localStorage.removeItem(prefixoFila(uid) + item.id);
+            if(usuarioLogado?.uid === uid){
+                if(!gravacaoEmAndamento && editandoIndex === null && !estadoConfirmado?.operacoesConfirmadas?.[item.id]) receberEstadoConfirmado(resultado.snapshot.val());
+                const aviso = document.getElementById("erroOperacao");
+                if(aviso?.dataset.fila === "true") { aviso.hidden = true; delete aviso.dataset.fila; }
+                mostrarPendencias();
+            }
+        } catch(error){
+            if(usuarioLogado?.uid === uid){
+                const detalhe = error.code || error.message || "falha de conexão";
+                try { localStorage.setItem(prefixoFila(uid) + item.id, JSON.stringify({ ...item, erro: detalhe })); } catch(cacheError){ console.warn("Cache original preservado:", cacheError); }
+                informarErro(new Error(`Não foi possível sincronizar: ${detalhe}. O lançamento permanece salvo neste aparelho e será reenviado automaticamente.`));
+                const aviso = document.getElementById("erroOperacao");
+                if(aviso) aviso.dataset.fila = "true";
+            }
+            return;
+        }
+    }
+}
+
+function carregarCacheUsuario(){
+    try {
+        const texto = localStorage.getItem(`${FIREBASE_ROOT_PATH}:ultimo-estado:${usuarioLogado.uid}`);
+        if(texto === null) return;
+        const estado = JSON.parse(texto);
+        validarEstadoRemoto(estado);
+        estadoConfirmado = copiarEstado(estado);
+        aplicarEstadoRemoto(estado);
+        temEstadoCarregado = true;
+        atualizarTela();
+        restaurarRascunho();
+        mostrarPendencias();
+    } catch(error){ informarErro(new Error("Não foi possível abrir o cache deste aparelho. Os registros foram preservados; aguardando o Firebase.")); }
+}
+
+function guardarRascunho(){
+    if(!usuarioLogado || gravacaoEmAndamento) return;
+    try {
+        localStorage.setItem(chaveRascunho(), JSON.stringify({ campos: camposFormulario(), anoAtual, mesAtual }));
+    } catch(error){ informarErro(new Error("Não foi possível guardar o rascunho neste navegador. Não feche a página antes de salvar no Firebase.")); }
+}
+
+function restaurarRascunho(){
+    try {
+        const rascunho = JSON.parse(localStorage.getItem(chaveRascunho()) || "null");
+        if(!rascunho) return;
+        if(rascunho.operacaoId && (estadoConfirmado?.operacoesConfirmadas?.[rascunho.operacaoId] ||
+            localStorage.getItem(`${FIREBASE_ROOT_PATH}:confirmado:${usuarioLogado.uid}:${rascunho.operacaoId}`) ||
+            localStorage.getItem(prefixoFila() + rascunho.operacaoId))){
+            localStorage.removeItem(chaveRascunho());
+            return;
+        }
+        anoAtual = String(rascunho.anoAtual);
+        mesAtual = normalizarMes(rascunho.mesAtual);
+        atualizarTela();
+        Object.entries(rascunho.campos || {}).forEach(([id, valor]) => {
+            const campo = document.getElementById(id);
+            if(campo && ["descricao", "cartao", "categoria", "valor", "parcelas"].includes(id)) campo.value = valor;
+        });
+    } catch(error){ informarErro(new Error("Não foi possível recuperar o rascunho do cache. O conteúdo foi preservado neste aparelho.")); }
 }
 
 function mensagemDadosCarregados(){
@@ -224,29 +442,66 @@ function mensagemDadosCarregados(){
         : `Nenhum lançamento encontrado nesta conta (${conta}). Confira se entrou com o mesmo e-mail usado anteriormente.`;
 }
 
-async function salvarEstado(){
+async function salvarEstado(proposto){
     exigirEstadoPronto();
+    validarEstadoRemoto(proposto);
     const sessao = sessaoDados;
-    mostrarStatusSincronizacao("Salvando alterações no Firebase…");
+    const base = copiarEstado(estadoConfirmado);
+    const candidato = copiarEstado(proposto);
+    const operacaoId = gerarIdSerie();
+    const chaveBackup = `${FIREBASE_ROOT_PATH}:backup:${usuarioLogado.uid}:${operacaoId}`;
+    const backup = { operacaoId, data: new Date().toISOString(), base, candidato, formulario: camposFormulario(), status: "pendente" };
     try {
-        await db.ref(getCaminhoDadosUsuario()).set(montarEstadoParaPersistencia());
-        if(sessao === sessaoDados) mostrarStatusSincronizacao(mensagemDadosCarregados());
+        localStorage.setItem(chaveBackup, JSON.stringify(backup));
+    }
+    catch(error){ throw new Error("Não foi possível criar a cópia de segurança local. A gravação foi interrompida; seus campos continuam preenchidos. Libere espaço no navegador e tente novamente."); }
+    gravacaoEmAndamento = true;
+    bloquearInteracao(true);
+    const painelErro = document.getElementById("erroOperacao");
+    if(painelErro) painelErro.hidden = true;
+    mostrarStatusSincronizacao("Salvando alterações no Firebase…");
+    const timer = window.setTimeout(() => {
+        if(sessao === sessaoDados && gravacaoEmAndamento){
+            informarErro(new Error("O Firebase ainda não confirmou a gravação. Não repita a operação nem feche a página. Os campos e a cópia local foram preservados; aguardando confirmação."));
+        }
+    }, 15000);
+    try {
+        const resultado = await db.ref(getCaminhoDadosUsuario()).transaction((atual) => {
+            if(sessao !== sessaoDados || assinaturaEstado(atual) !== assinaturaEstado(base)) return;
+            return { ...atual, ...candidato, preferencias: atual?.preferencias || candidato.preferencias,
+                operacoesConfirmadas: { ...atual?.operacoesConfirmadas, [operacaoId]: true } };
+        }, undefined, false);
+        if(!resultado.committed) throw new Error("Os dados mudaram em outra sessão. Nada foi sobrescrito. Seus campos foram preservados. Cancele a edição para visualizar os dados atualizados antes de tentar novamente.");
+        backup.status = "confirmado";
+        try { localStorage.setItem(chaveBackup, JSON.stringify(backup)); } catch(error){ console.warn("Cópia local mantida como pendente:", error); }
+        if(sessao !== sessaoDados) throw new Error("A conta mudou durante a gravação. Confira o resultado na conta original antes de repetir a operação.");
+        estadoConfirmado = copiarEstado(resultado.snapshot.val());
+        aplicarEstadoRemoto(estadoConfirmado, true);
+        if(painelErro) painelErro.hidden = true;
+        mostrarStatusSincronizacao("Alterações confirmadas pelo Firebase.");
     } catch(error){
         if(sessao === sessaoDados){
-            estadoPronto = false;
-            mostrarStatusSincronizacao(`Não foi possível salvar (${error.code || "erro de conexão"}). Recarregue os dados antes de continuar.`, true);
+            informarErro(new Error(`Não foi possível concluir a gravação. ${error.message || error.code || "Erro de conexão."} Os campos e a tentativa no cache foram mantidos.`));
         }
         throw error;
+    } finally {
+        window.clearTimeout(timer);
+        if(sessao === sessaoDados){
+            gravacaoEmAndamento = false;
+            bloquearInteracao(false);
+            if(!erroSincronizacao && editandoIndex === null) aplicarAtualizacaoAdiada();
+        }
     }
 }
 
 async function salvarPreferencias(){
+    if(!conectado || envioFila) return;
     exigirEstadoPronto();
     const sessao = sessaoDados;
     try {
         await db.ref(`${getCaminhoDadosUsuario()}/preferencias`).update({ anoAtual, mesAtual });
     } catch(error){
-        if(sessao === sessaoDados) mostrarStatusSincronizacao(`Não foi possível salvar o período selecionado (${error.code || "erro de conexão"}).`, true);
+        if(sessao === sessaoDados) informarErro(new Error(`Não foi possível salvar o período selecionado (${error.code || "erro de conexão"}).`));
     }
 }
 
@@ -320,6 +575,8 @@ function toggleMenuUsuario(){
 }
 
 async function sairDoSistema(){
+    if(gravacaoEmAndamento){ informarErro(new Error("Aguarde a confirmação da gravação antes de sair.")); return; }
+    guardarRascunho();
     autenticacaoManualPendente = true;
     fecharMenuUsuario();
 
@@ -418,6 +675,8 @@ function preencherSelectsFixos(){
     const selectCategoria = document.getElementById("categoria");
     const filtroCartao = document.getElementById("filtroCartao");
     const filtroCategoria = document.getElementById("filtroCategoria");
+    const cartaoSelecionado = selectCartao.value;
+    const categoriaSelecionada = selectCategoria.value;
 
     cartoes = obterListaUnica(cartoes, "cartao");
     categorias = obterListaUnica(categorias, "categoria");
@@ -427,14 +686,15 @@ function preencherSelectsFixos(){
     filtroCartao.innerHTML = montarOpcoesFiltro(cartoes, "Todos os cartões");
     filtroCategoria.innerHTML = montarOpcoesFiltro(categorias, "Todas as categorias");
 
-    selectCartao.value = "";
-    selectCategoria.value = "";
+    selectCartao.value = cartaoSelecionado;
+    selectCategoria.value = categoriaSelecionada;
     filtroCartao.value = filtros.cartao;
     filtroCategoria.value = filtros.categoria;
 }
 
 async function cadastrarNovoItem(tipo){
     exigirEstadoPronto();
+    const candidato = copiarEstado(montarEstadoParaPersistencia());
     const configuracao = tipo === "cartao"
         ? {
             titulo: "cartão",
@@ -460,6 +720,9 @@ async function cadastrarNovoItem(tipo){
     }
 
     const nomeNormalizado = normalizarItemLista(tipo, nomeTratado);
+    if(/[.#$\[\]\/\u0000-\u001f\u007f]/.test(nomeNormalizado) || ["__proto__", "constructor", "prototype"].includes(normalizarChaveLista(nomeNormalizado))){
+        throw new Error("Use um nome sem os caracteres . # $ [ ] / para cadastrar o item.");
+    }
     const existe = configuracao.lista.some((item) => normalizarChaveLista(item) === normalizarChaveLista(nomeNormalizado));
     const nomeFinal = existe
         ? configuracao.lista.find((item) => normalizarChaveLista(item) === normalizarChaveLista(nomeNormalizado))
@@ -487,23 +750,26 @@ async function cadastrarNovoItem(tipo){
                 return;
             }
 
-            informacoesCartoes[normalizarChaveLista(nomeFinal)] = {
+            if(![vencimentoTratado, melhorCompraTratada].every((dia) => /^\d{1,2}$/.test(dia) && Number(dia) >= 1 && Number(dia) <= 31)){
+                throw new Error("Informe dias entre 1 e 31 para vencimento e melhor compra.");
+            }
+            candidato.informacoesCartoes[normalizarChaveLista(nomeFinal)] = {
                 vencimento: vencimentoTratado,
                 melhorCompra: melhorCompraTratada
             };
         }
 
-        configuracao.lista.push(nomeFinal);
         if(tipo === "cartao") {
-            cartoes = obterListaUnica(configuracao.lista, "cartao");
+            candidato.cartoes = obterListaUnica([...cartoes, nomeFinal], "cartao");
         } else {
-            categorias = obterListaUnica(configuracao.lista, "categoria");
+            candidato.categorias = obterListaUnica([...categorias, nomeFinal], "categoria");
         }
-        await salvarEstado();
+        await salvarEstado(candidato);
     }
 
     preencherSelectsFixos();
     document.getElementById(configuracao.selectId).value = nomeFinal;
+    guardarRascunho();
 }
 
 function inicializarSelectsDinamicos(){
@@ -512,7 +778,7 @@ function inicializarSelectsDinamicos(){
     document.getElementById("cartao").addEventListener("change", (event) => {
         if(event.target.value === NOVO_ITEM_VALUE) {
             cadastrarNovoItem("cartao").catch((error) => {
-                console.error("Erro ao cadastrar cartão:", error);
+                informarErro(error);
             });
         }
     });
@@ -520,7 +786,7 @@ function inicializarSelectsDinamicos(){
     document.getElementById("categoria").addEventListener("change", (event) => {
         if(event.target.value === NOVO_ITEM_VALUE) {
             cadastrarNovoItem("categoria").catch((error) => {
-                console.error("Erro ao cadastrar categoria:", error);
+                informarErro(error);
             });
         }
     });
@@ -538,11 +804,12 @@ function carregarAnos(){
 
     selectAno.value = anoAtual;
     selectAno.addEventListener("change", (event) => {
-        if(!estadoPronto) return;
+        if(!estadoPronto || gravacaoEmAndamento || editandoIndex !== null) return;
         anoAtual = event.target.value;
+        guardarRascunho();
         limparSelecao(false);
         salvarPreferencias().catch((error) => {
-            console.error("Erro ao salvar o ano atual no Firebase:", error);
+                informarErro(error);
         });
         editandoIndex = null;
         atualizarTela();
@@ -559,11 +826,12 @@ function criarAbas(){
         aba.className = index === mesAtual ? "tab active" : "tab";
         aba.textContent = mes;
         aba.onclick = () => {
-            if(!estadoPronto) return;
+            if(!estadoPronto || gravacaoEmAndamento || editandoIndex !== null) return;
             mesAtual = index;
+            guardarRascunho();
             limparSelecao(false);
             salvarPreferencias().catch((error) => {
-                console.error("Erro ao salvar o mês atual no Firebase:", error);
+                informarErro(error);
             });
             editandoIndex = null;
             atualizarTela();
@@ -574,12 +842,14 @@ function criarAbas(){
 
 function inicializarFiltros(){
     document.getElementById("filtroDescricao").addEventListener("input", (event) => {
+        if(editandoIndex !== null || gravacaoEmAndamento) return;
         filtros.descricao = event.target.value;
         editandoIndex = null;
         atualizarTela();
     });
 
     document.getElementById("filtroCartao").addEventListener("change", (event) => {
+        if(editandoIndex !== null || gravacaoEmAndamento) return;
         filtros.cartao = event.target.value;
         editandoIndex = null;
         fecharFiltros();
@@ -587,6 +857,7 @@ function inicializarFiltros(){
     });
 
     document.getElementById("filtroCategoria").addEventListener("change", (event) => {
+        if(editandoIndex !== null || gravacaoEmAndamento) return;
         filtros.categoria = event.target.value;
         editandoIndex = null;
         fecharFiltros();
@@ -594,6 +865,7 @@ function inicializarFiltros(){
     });
 
     document.getElementById("filtroValor").addEventListener("input", (event) => {
+        if(editandoIndex !== null || gravacaoEmAndamento) return;
         filtros.valor = event.target.value;
         editandoIndex = null;
         atualizarTela();
@@ -626,6 +898,7 @@ function inicializarFiltros(){
 }
 
 function limparFiltros(){
+    if(editandoIndex !== null || gravacaoEmAndamento) return;
     filtros.descricao = "";
     filtros.cartao = "";
     filtros.categoria = "";
@@ -848,27 +1121,6 @@ function obterSerieLancamento(ano, mes, index){
 
     if(serieId){
         referenciasSerie = listarLancamentosComReferencia().filter((ref) => String(ref.lancamento?.serieId || "").trim() === serieId);
-    } else if(infoAtual.possuiSerie){
-        const chaveComparacao = [
-            normalizarChaveLista(infoAtual.base),
-            normalizarChaveLista(lancamentoAtual.cartao),
-            normalizarChaveLista(lancamentoAtual.categoria),
-            Number(lancamentoAtual.valor || 0).toFixed(2),
-            infoAtual.total
-        ].join("|");
-
-        referenciasSerie = listarLancamentosComReferencia().filter((ref) => {
-            const infoRef = obterInfoParcela(ref.lancamento);
-            const chaveRef = [
-                normalizarChaveLista(infoRef.base),
-                normalizarChaveLista(ref.lancamento?.cartao),
-                normalizarChaveLista(ref.lancamento?.categoria),
-                Number(ref.lancamento?.valor || 0).toFixed(2),
-                infoRef.total
-            ].join("|");
-
-            return infoRef.possuiSerie && chaveRef === chaveComparacao;
-        });
     } else {
         referenciasSerie = [{
             ano: String(ano),
@@ -1275,16 +1527,23 @@ function renderizarGraficosPizzaAnuais(){
 }
 
 async function adicionarGasto(){
-    exigirEstadoPronto();
+    if(!usuarioLogado || !temEstadoCarregado) throw new Error("Aguarde o primeiro carregamento dos dados da sua conta.");
+    if(gravacaoEmAndamento || editandoIndex !== null) throw new Error("Conclua a alteração em andamento antes de adicionar outro lançamento.");
     const descricao = document.getElementById("descricao").value.trim();
     const cartao = document.getElementById("cartao").value;
     const categoria = document.getElementById("categoria").value;
-    const valor = parseFloat(document.getElementById("valor").value);
-    const parcelas = parseInt(document.getElementById("parcelas").value, 10) || 1;
-
-    if(!descricao || !cartao || !categoria || !valor || !parcelas) return;
-
-    const valorParcela = valor / parcelas;
+    const valor = Number(document.getElementById("valor").value);
+    const parcelas = Number(document.getElementById("parcelas").value || 1);
+    validarLancamento(descricao, cartao, categoria, valor);
+    if(!Number.isInteger(parcelas) || parcelas < 1 || parcelas > 120){
+        throw new Error("Informe um número inteiro de parcelas entre 1 e 120.");
+    }
+    if(Number(anoAtual) + Math.floor((mesAtual + parcelas - 1) / 12) > 2099){
+        throw new Error("As parcelas ultrapassam o último ano disponível (2099).");
+    }
+    const centavos = Math.round(valor * 100);
+    if(centavos < parcelas) throw new Error("Cada parcela precisa ter pelo menos R$ 0,01.");
+    const lancamentos = [];
     const serieId = parcelas > 1 ? gerarIdSerie() : "";
 
     for(let i = 0; i < parcelas; i++){
@@ -1296,24 +1555,41 @@ async function adicionarGasto(){
             anoParcela++;
         }
 
-        if(!dados[anoParcela]) dados[anoParcela] = {};
-        if(!dados[anoParcela][mesParcela]) dados[anoParcela][mesParcela] = [];
-
-        dados[anoParcela][mesParcela].push({
+        lancamentos.push({ ano: anoParcela, mes: mesParcela, gasto: {
             descricao: montarDescricaoLancamento(descricao, i + 1, parcelas),
             cartao,
             categoria,
-            valor: valorParcela,
+            valor: (Math.floor(centavos / parcelas) + (i < centavos % parcelas ? 1 : 0)) / 100,
             serieId,
             serieNumeroParcela: i + 1,
             serieTotalParcelas: parcelas,
             serieDescricaoBase: descricao
-        });
+        } });
     }
 
-    await salvarEstado();
+    const item = { id: gerarIdSerie(), uid: usuarioLogado.uid, criadoEm: new Date().toISOString(), descricao, total: valor, lancamentos,
+        contaComRegistros: Boolean(estadoConfirmado?.dados && Object.keys(estadoConfirmado.dados).length) };
+    try {
+        localStorage.setItem(chaveRascunho(), JSON.stringify({ campos: camposFormulario(), anoAtual, mesAtual, operacaoId: item.id }));
+        localStorage.setItem(prefixoFila() + item.id, JSON.stringify(item));
+    } catch(error){
+        throw new Error("Não foi possível guardar este lançamento no cache do aparelho. Nada foi enviado. Os campos foram mantidos; libere espaço no navegador e tente novamente.");
+    }
     limparFormulario();
-    atualizarTela();
+    try { localStorage.removeItem(chaveRascunho()); } catch(error){ console.warn("Não foi possível limpar o rascunho:", error); }
+    mostrarPendencias();
+    agendarEnvioFila();
+    await sincronizarFila();
+}
+
+function validarLancamento(descricao, cartao, categoria, valor){
+    if(!descricao || !cartao || !categoria || cartao === NOVO_ITEM_VALUE || categoria === NOVO_ITEM_VALUE){
+        throw new Error("Preencha a descrição e selecione um cartão e uma categoria cadastrados.");
+    }
+    if(!Number.isFinite(valor) || valor <= 0 || !Number.isSafeInteger(Math.round(valor * 100)) ||
+        Math.abs(valor * 100 - Math.round(valor * 100)) > 0.00001){
+        throw new Error("Informe um valor positivo com no máximo duas casas decimais.");
+    }
 }
 
 function limparFormulario(){
@@ -1343,7 +1619,7 @@ function renderLinhaEdicao(gasto){
             <td><input type="number" id="editValor" min="0" step="0.01" value="${gasto.valor.toFixed(2)}"></td>
             <td class="actions-cell">
                 <div class="action-buttons">
-                    <button class="inline-action save-button" onclick="salvarEdicao(${gasto.originalIndex})">Salvar</button>
+                    <button class="inline-action save-button" onclick="executarAcao(() => salvarEdicao(${gasto.originalIndex}))">Salvar</button>
                     <button class="inline-action cancel-button" onclick="cancelarEdicao()">Cancelar</button>
                 </div>
             </td>
@@ -1365,7 +1641,7 @@ function renderLinhaVisual(gasto){
             <td class="actions-cell">
                 <div class="action-buttons">
                     <button class="icon-button edit-button" onclick="iniciarEdicao(${gasto.originalIndex})" title="Editar lançamento" aria-label="Editar lançamento">&#9998;</button>
-                    <button class="icon-button delete-button" onclick="remover(${gasto.originalIndex})" title="Remover lançamento" aria-label="Remover lançamento">X</button>
+                    <button class="icon-button delete-button" onclick="executarAcao(() => remover(${gasto.originalIndex}))" title="Remover lançamento" aria-label="Remover lançamento">X</button>
                 </div>
             </td>
         </tr>
@@ -1373,6 +1649,9 @@ function renderLinhaVisual(gasto){
 }
 
 function atualizarTela(){
+    if(gravacaoEmAndamento) return;
+    const camposEdicao = editandoIndex === null ? null : Object.fromEntries(
+        ["editDescricao", "editCartao", "editCategoria", "editValor"].map((id) => [id, document.getElementById(id)?.value]));
     criarAbas();
     preencherSelectsFixos();
     atualizarSaudacaoUsuario();
@@ -1415,9 +1694,14 @@ function atualizarTela(){
     renderizarGraficoCategorias();
     renderizarGraficosPizzaMensais();
     renderizarGraficosPizzaAnuais();
+    document.getElementById("ano").value = anoAtual;
+    if(camposEdicao) Object.entries(camposEdicao).forEach(([id, valor]) => {
+        if(valor !== undefined && document.getElementById(id)) document.getElementById(id).value = valor;
+    });
 }
 
 function iniciarEdicao(index){
+    if(gravacaoEmAndamento || editandoIndex !== null) return;
     editandoIndex = index;
     atualizarTela();
     window.setTimeout(() => {
@@ -1430,7 +1714,10 @@ function iniciarEdicao(index){
 }
 
 function cancelarEdicao(){
+    if(gravacaoEmAndamento) return;
+    if(editandoIndex !== null && !window.confirm("Descartar as alterações desta edição? Se uma gravação foi tentada, a cópia local continua disponível.")) return;
     editandoIndex = null;
+    aplicarAtualizacaoAdiada();
     atualizarTela();
 }
 
@@ -1439,9 +1726,9 @@ async function salvarEdicao(index){
     const descricao = document.getElementById("editDescricao").value.trim();
     const cartao = document.getElementById("editCartao").value;
     const categoria = document.getElementById("editCategoria").value;
-    const valor = parseFloat(document.getElementById("editValor").value);
-
-    if(!descricao || !cartao || !categoria || !valor) return;
+    const valor = Number(document.getElementById("editValor").value);
+    validarLancamento(descricao, cartao, categoria, valor);
+    const candidato = copiarEstado(montarEstadoParaPersistencia());
 
     const referenciasSerie = obterSerieLancamento(anoAtual, mesAtual, index);
     const referenciaAtual = referenciasSerie.find((ref) => ref.ano === String(anoAtual) && ref.mes === Number(mesAtual) && ref.index === index);
@@ -1465,7 +1752,7 @@ async function salvarEdicao(index){
             valor
         };
 
-        dados[ref.ano][ref.mes][ref.index] = modo === "ocorrencia"
+        candidato.dados[ref.ano][ref.mes][ref.index] = modo === "ocorrencia"
             ? limparMetadadosSerie(lancamentoAtualizado)
             : {
                 ...lancamentoAtualizado,
@@ -1477,13 +1764,16 @@ async function salvarEdicao(index){
             };
     });
 
-    await salvarEstado();
+    await salvarEstado(candidato);
     editandoIndex = null;
+    aplicarAtualizacaoAdiada();
     atualizarTela();
 }
 
 async function remover(index){
     exigirEstadoPronto();
+    if(editandoIndex !== null) throw new Error("Conclua ou cancele a edição antes de excluir um lançamento.");
+    const candidato = copiarEstado(montarEstadoParaPersistencia());
     if(!dados[anoAtual] || !dados[anoAtual][mesAtual]) return;
 
     const referenciasSerie = obterSerieLancamento(anoAtual, mesAtual, index);
@@ -1494,6 +1784,7 @@ async function remover(index){
     if(!modo) return;
 
     const referenciasParaExcluir = modo === "serie" ? referenciasSerie : [referenciaAtual];
+    if(!window.confirm(`Excluir ${referenciasParaExcluir.length} lançamento(s)? Uma cópia local será guardada antes da exclusão.`)) return;
     const agrupadas = new Map();
 
     referenciasParaExcluir.forEach((ref) => {
@@ -1505,25 +1796,29 @@ async function remover(index){
     agrupadas.forEach((indices, chave) => {
         const [ano, mes] = chave.split("-");
         indices.sort((a, b) => b - a).forEach((indice) => {
-            dados[ano][mes].splice(indice, 1);
+            candidato.dados[ano][mes].splice(indice, 1);
         });
 
-        if(dados[ano][mes].length === 0){
-            delete dados[ano][mes];
+        if(candidato.dados[ano][mes].length === 0){
+            delete candidato.dados[ano][mes];
         }
     });
 
-    editandoIndex = null;
+    await salvarEstado(candidato);
     limparSelecao(false);
-    await salvarEstado();
     atualizarTela();
 }
 
 async function inicializarApp(){
+    if(gravacaoEmAndamento) throw new Error("Aguarde o resultado da gravação antes de recarregar.");
+    if(editandoIndex !== null) return;
     garantirUIInicializada();
+    if(!temEstadoCarregado) carregarCacheUsuario();
     estadoPronto = false;
+    erroSincronizacao = false;
     mostrarStatusSincronizacao("Carregando seus dados do Firebase…");
     assinarDadosUsuario();
+    mostrarPendencias();
 }
 
 function garantirUIInicializada(){
@@ -1533,10 +1828,62 @@ function garantirUIInicializada(){
     carregarAnos();
     inicializarSelectsDinamicos();
     inicializarFiltros();
+    document.querySelector(".card-form")?.addEventListener("input", guardarRascunho);
+    document.querySelector(".card-form")?.addEventListener("change", guardarRascunho);
+    window.addEventListener("online", () => { sincronizarFila().catch(informarErro); });
+    if(typeof navigator !== "undefined" && "serviceWorker" in navigator){
+        navigator.serviceWorker.register("./service-worker.js").catch((error) => {
+            console.warn("Não foi possível preparar a abertura offline:", error);
+        });
+    }
+    window.addEventListener("storage", (event) => {
+        if(usuarioLogado && event.key?.startsWith(prefixoFila())){
+            mostrarPendencias();
+            sincronizarFila().catch(informarErro);
+        }
+    });
+    document.addEventListener("visibilitychange", () => {
+        if(document.visibilityState === "visible") sincronizarFila().catch(informarErro);
+    });
+    window.addEventListener("beforeunload", (event) => {
+        if(gravacaoEmAndamento || editandoIndex !== null){
+            event.preventDefault();
+            event.returnValue = "";
+        }
+    });
     restaurarEstadoPaineis();
     atualizarVisibilidadeTelas();
     atualizarTela();
     appInicializado = true;
+}
+
+function receberEstadoConfirmado(estado){
+    validarEstadoRemoto(estado);
+    const primeiroCarregamento = !temEstadoCarregado;
+    if(estado === null && temEstadoCarregado && estadoConfirmado?.dados){
+        throw new Error("O banco retornou dados vazios após um carregamento com registros. A gravação foi bloqueada. Confira a conta e use a cópia local para verificar seus dados.");
+    }
+    estadoConfirmado = copiarEstado(estado);
+    aplicarEstadoRemoto(estado, !primeiroCarregamento);
+    atualizarTela();
+    estadoPronto = true;
+    temEstadoCarregado = true;
+    erroSincronizacao = false;
+    if(primeiroCarregamento) restaurarRascunho();
+    try {
+        localStorage.setItem(`${FIREBASE_ROOT_PATH}:ultimo-estado:${usuarioLogado.uid}`, JSON.stringify(estado));
+    } catch(error){ informarErro(new Error("Dados carregados, mas não foi possível atualizar o cache do aparelho. Verifique o espaço disponível no navegador.")); }
+    mostrarStatusSincronizacao(conectado ? "" : "Sem conexão. Novos lançamentos serão guardados neste aparelho e sincronizados automaticamente.", !conectado);
+    mostrarPendencias();
+    sincronizarFila().catch(informarErro);
+}
+
+function aplicarAtualizacaoAdiada(){
+    if(estadoAdiado === undefined || gravacaoEmAndamento || editandoIndex !== null) return;
+    const estado = estadoAdiado;
+    estadoAdiado = undefined;
+    try { receberEstadoConfirmado(estado); }
+    catch(error){ estadoPronto = false; erroSincronizacao = true; informarErro(error); }
 }
 
 function assinarDadosUsuario(){
@@ -1548,22 +1895,36 @@ function assinarDadosUsuario(){
 
     const sessao = ++sessaoDados;
     const refDados = db.ref(getCaminhoDadosUsuario());
+    const refConexao = db.ref(".info/connected");
+    conectado = false;
+    estadoAdiado = undefined;
+    const listenerConexao = (snapshot) => {
+        if(sessao !== sessaoDados) return;
+        conectado = snapshot.val() === true;
+        if(gravacaoEmAndamento){
+            if(!conectado) informarErro(new Error("A conexão caiu durante a gravação. Aguardando confirmação do Firebase; não repita a operação. A cópia local foi preservada."));
+            return;
+        }
+        if(!conectado) mostrarStatusSincronizacao("Sem conexão. Novos lançamentos serão guardados neste aparelho e sincronizados automaticamente.", true);
+        else if(estadoPronto && !erroSincronizacao){
+            mostrarStatusSincronizacao("");
+            sincronizarFila().catch(informarErro);
+        }
+    };
     const timer = window.setTimeout(() => {
         if(sessao !== sessaoDados || estadoPronto) return;
-        mostrarStatusSincronizacao("O Firebase ainda não respondeu. Verifique a conexão e tente recarregar os dados.", true);
+        mostrarStatusSincronizacao("Aguardando o Firebase. Seus lançamentos pendentes continuam no cache deste aparelho.", true);
     }, 15000);
     const listener = (snapshot) => {
         if(sessao !== sessaoDados) return;
         window.clearTimeout(timer);
         try {
             const estado = snapshot.val();
-            if(estado !== null && (typeof estado !== "object" || Array.isArray(estado))){
-                throw new Error("Formato de dados inválido no Firebase.");
+            if(gravacaoEmAndamento || editandoIndex !== null){
+                estadoAdiado = copiarEstado(estado);
+                return;
             }
-            aplicarEstadoRemoto(estado);
-            atualizarTela();
-            estadoPronto = true;
-            mostrarStatusSincronizacao(mensagemDadosCarregados());
+            receberEstadoConfirmado(estado);
         } catch(error){
             falha(error);
         }
@@ -1572,14 +1933,22 @@ function assinarDadosUsuario(){
         if(sessao !== sessaoDados) return;
         window.clearTimeout(timer);
         estadoPronto = false;
+        erroSincronizacao = true;
         console.error("Erro ao sincronizar dados do Firebase:", error);
         mostrarStatusSincronizacao(`Não foi possível carregar os dados (${error.code || error.message}). Confira a conexão e as permissões da conta no Firebase.`, true);
+        window.clearTimeout(timerReconexao);
+        timerReconexao = window.setTimeout(() => {
+            if(sessao === sessaoDados && usuarioLogado && !gravacaoEmAndamento && !envioFila) assinarDadosUsuario();
+        }, 30000);
     };
 
     refDados.on("value", listener, falha);
+    refConexao.on("value", listenerConexao, falha);
     unsubscribeDados = () => {
         window.clearTimeout(timer);
         refDados.off("value", listener);
+        refConexao.off("value", listenerConexao);
+        window.clearTimeout(timerReconexao);
     };
 }
 
@@ -1637,7 +2006,7 @@ async function concluirRedirectAutenticacao(){
 async function processarUsuarioAutenticado(user){
     if(!user) return;
 
-    if(usuarioLogado?.uid === user.uid && estadoPronto) {
+    if(usuarioLogado?.uid === user.uid && (estadoPronto || gravacaoEmAndamento)) {
         atualizarVisibilidadeTelas();
         return;
     }
@@ -1645,6 +2014,12 @@ async function processarUsuarioAutenticado(user){
     autenticacaoManualPendente = false;
     limparRedirectEmAndamento();
     usuarioLogado = user;
+    estadoConfirmado = null;
+    estadoAdiado = undefined;
+    gravacaoEmAndamento = false;
+    temEstadoCarregado = false;
+    bloquearInteracao(false);
+    limparFormulario();
     estadoPronto = false;
     dados = {};
     cartoes = [];
@@ -1657,12 +2032,23 @@ async function processarUsuarioAutenticado(user){
 }
 
 function processarUsuarioDeslogado(){
+    window.clearTimeout(timerFila);
+    window.clearTimeout(timerReconexao);
     sessaoDados++;
     usuarioLogado = null;
     estadoPronto = false;
     dados = {};
     cartoes = [];
     categorias = [];
+    estadoConfirmado = null;
+    estadoAdiado = undefined;
+    conectado = false;
+    temEstadoCarregado = false;
+    gravacaoEmAndamento = false;
+    editandoIndex = null;
+    erroSincronizacao = false;
+    limparFormulario();
+    bloquearInteracao(false);
 
     if(typeof unsubscribeDados === "function"){
         unsubscribeDados();
