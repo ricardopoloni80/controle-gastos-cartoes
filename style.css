@@ -1438,3 +1438,9 @@ tbody tr:hover td {
         padding: 14px 12px;
     }
 }
+.sync-panel { padding: 16px 20px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.sync-panel p { flex: 1; margin: 0; }
+.sync-panel button { cursor: pointer; padding: 8px 12px; }
+.sync-error { color: #b42318; }
+.dados-indisponiveis > section:not(.hero-panel) { display: none; }
+.dados-indisponiveis .ano-box { visibility: hidden; }

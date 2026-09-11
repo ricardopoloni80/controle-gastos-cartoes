@@ -34,7 +34,7 @@
         </section>
     </main>
 
-    <main class="app-shell is-hidden" id="appShell">
+    <main class="app-shell is-hidden dados-indisponiveis" id="appShell">
         <section class="hero-panel">
             <div class="header">
                 <div class="title-block">
@@ -53,6 +53,11 @@
                 </div>
             </div>
         </section>
+
+        <div class="surface-card sync-panel">
+            <p id="statusSincronizacao" role="status" aria-live="polite">Carregando seus dados do Firebase…</p>
+            <button type="button" onclick="inicializarApp()">Recarregar dados</button>
+        </div>
 
         <section class="surface-card months-panel">
             <div class="section-heading">

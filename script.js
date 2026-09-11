@@ -20,6 +20,7 @@ let estadoPronto = false;
 let usuarioLogado = null;
 let appInicializado = false;
 let unsubscribeDados = null;
+let sessaoDados = 0;
 let autenticacaoManualPendente = false;
 let lancamentosSelecionados = new Set();
 
@@ -74,6 +75,7 @@ let informacoesCartoes = {
         melhorCompra: "--"
     }
 };
+const informacoesCartoesIniciais = JSON.parse(JSON.stringify(informacoesCartoes));
 
 function gerarIdSerie(){
     return `serie-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -169,36 +171,82 @@ function montarEstadoParaPersistencia(){
 }
 
 function aplicarEstadoRemoto(estado){
-    const listasResetadas = estado?.listasVersao !== LISTAS_VERSAO_ATUAL;
-    const cartoesRemotos = Array.isArray(estado?.cartoes) && !listasResetadas ? estado.cartoes : [];
-    const categoriasRemotas = Array.isArray(estado?.categorias) && !listasResetadas ? estado.categorias : [];
+    if(estado !== null && estado !== undefined){
+        const campos = ["dados", "cartoes", "categorias", "informacoesCartoes", "preferencias", "listasVersao"];
+        if(typeof estado !== "object" || Array.isArray(estado) ||
+            !Object.keys(estado).some((chave) => campos.includes(chave))){
+            throw new Error("Formato de dados não reconhecido. Verifique o cadastro no Firebase.");
+        }
+        if(estado.dados !== undefined && estado.dados !== null){
+            if(typeof estado.dados !== "object" || Object.values(estado.dados).some((ano) =>
+                !ano || typeof ano !== "object" || Object.values(ano).some((mes) =>
+                    mes !== null && (!Array.isArray(mes) || mes.some((item) =>
+                        !item || typeof item !== "object" || typeof item.valor !== "number"))))){
+                throw new Error("Formato dos lançamentos não reconhecido. Os dados não serão sobrescritos.");
+            }
+        }
+    }
+    const cartoesRemotos = Array.isArray(estado?.cartoes) ? estado.cartoes : [];
+    const categoriasRemotas = Array.isArray(estado?.categorias) ? estado.categorias : [];
 
     dados = estado?.dados && typeof estado.dados === "object" ? estado.dados : {};
     cartoes = obterListaUnica([...cartoesPadrao, ...cartoesRemotos], "cartao");
     categorias = obterListaUnica([...categoriasPadrao, ...categoriasRemotas], "categoria");
     informacoesCartoes = estado?.informacoesCartoes && typeof estado.informacoesCartoes === "object"
-        ? { ...informacoesCartoes, ...estado.informacoesCartoes }
-        : informacoesCartoes;
+        ? { ...informacoesCartoesIniciais, ...estado.informacoesCartoes }
+        : { ...informacoesCartoesIniciais };
     anoAtual = String(estado?.preferencias?.anoAtual || definirAnoInicial());
     mesAtual = normalizarMes(estado?.preferencias?.mesAtual);
+    sincronizarListasComDados();
+}
+
+function exigirEstadoPronto(){
+    if(!usuarioLogado || !estadoPronto){
+        throw new Error("Aguarde o carregamento dos dados do Firebase antes de fazer alterações.");
+    }
+}
+
+function mostrarStatusSincronizacao(mensagem, erro = false){
+    const status = document.getElementById("statusSincronizacao");
+    if(status){
+        status.textContent = mensagem;
+        status.classList.toggle("sync-error", erro);
+    }
+    document.getElementById("appShell")?.classList.toggle("dados-indisponiveis", !estadoPronto);
+}
+
+function mensagemDadosCarregados(){
+    const conta = usuarioLogado?.email || obterNomeUsuario();
+    const possuiLancamentos = Object.values(dados).some((ano) =>
+        Object.values(ano || {}).some((mes) => Array.isArray(mes) && mes.length > 0));
+    return possuiLancamentos
+        ? `Dados carregados • ${conta} • Período: ${meses[mesAtual]}/${anoAtual}`
+        : `Nenhum lançamento encontrado nesta conta (${conta}). Confira se entrou com o mesmo e-mail usado anteriormente.`;
 }
 
 async function salvarEstado(){
-    if(!usuarioLogado) throw new Error("Usuário não autenticado.");
-    await db.ref(getCaminhoDadosUsuario()).set(montarEstadoParaPersistencia());
+    exigirEstadoPronto();
+    const sessao = sessaoDados;
+    mostrarStatusSincronizacao("Salvando alterações no Firebase…");
+    try {
+        await db.ref(getCaminhoDadosUsuario()).set(montarEstadoParaPersistencia());
+        if(sessao === sessaoDados) mostrarStatusSincronizacao(mensagemDadosCarregados());
+    } catch(error){
+        if(sessao === sessaoDados){
+            estadoPronto = false;
+            mostrarStatusSincronizacao(`Não foi possível salvar (${error.code || "erro de conexão"}). Recarregue os dados antes de continuar.`, true);
+        }
+        throw error;
+    }
 }
 
-async function carregarEstadoInicial(){
-    if(!usuarioLogado) throw new Error("Usuário não autenticado.");
-
-    const caminhoUsuario = getCaminhoDadosUsuario();
-    const snapshotUsuario = await db.ref(caminhoUsuario).once("value");
-    const estado = snapshotUsuario.val();
-
-    aplicarEstadoRemoto(estado);
-
-    if(estado && estado.listasVersao !== LISTAS_VERSAO_ATUAL){
-        await salvarEstado();
+async function salvarPreferencias(){
+    exigirEstadoPronto();
+    const sessao = sessaoDados;
+    try {
+        await db.ref(`${getCaminhoDadosUsuario()}/preferencias`).update({ anoAtual, mesAtual });
+    } catch(error){
+        if(sessao === sessaoDados) mostrarStatusSincronizacao(`Não foi possível salvar o período selecionado (${error.code || "erro de conexão"}).`, true);
     }
 }
 
@@ -342,8 +390,10 @@ function inicializarAutenticacaoUI(){
 }
 
 function sincronizarListasComDados(){
-    cartoes = obterListaUnica([...cartoesPadrao, ...cartoes], "cartao");
-    categorias = obterListaUnica([...categoriasPadrao, ...categorias], "categoria");
+    const lancamentos = Object.values(dados).flatMap((ano) =>
+        Object.values(ano || {}).flatMap((mes) => Array.isArray(mes) ? mes.filter(Boolean) : []));
+    cartoes = obterListaUnica([...cartoesPadrao, ...cartoes, ...lancamentos.map((item) => item.cartao)], "cartao");
+    categorias = obterListaUnica([...categoriasPadrao, ...categorias, ...lancamentos.map((item) => item.categoria)], "categoria");
 }
 
 function montarOpcoes(lista, placeholder, incluirNovo = false){
@@ -384,6 +434,7 @@ function preencherSelectsFixos(){
 }
 
 async function cadastrarNovoItem(tipo){
+    exigirEstadoPronto();
     const configuracao = tipo === "cartao"
         ? {
             titulo: "cartão",
@@ -487,9 +538,10 @@ function carregarAnos(){
 
     selectAno.value = anoAtual;
     selectAno.addEventListener("change", (event) => {
+        if(!estadoPronto) return;
         anoAtual = event.target.value;
         limparSelecao(false);
-        salvarEstado().catch((error) => {
+        salvarPreferencias().catch((error) => {
             console.error("Erro ao salvar o ano atual no Firebase:", error);
         });
         editandoIndex = null;
@@ -507,9 +559,10 @@ function criarAbas(){
         aba.className = index === mesAtual ? "tab active" : "tab";
         aba.textContent = mes;
         aba.onclick = () => {
+            if(!estadoPronto) return;
             mesAtual = index;
             limparSelecao(false);
-            salvarEstado().catch((error) => {
+            salvarPreferencias().catch((error) => {
                 console.error("Erro ao salvar o mês atual no Firebase:", error);
             });
             editandoIndex = null;
@@ -1222,6 +1275,7 @@ function renderizarGraficosPizzaAnuais(){
 }
 
 async function adicionarGasto(){
+    exigirEstadoPronto();
     const descricao = document.getElementById("descricao").value.trim();
     const cartao = document.getElementById("cartao").value;
     const categoria = document.getElementById("categoria").value;
@@ -1381,6 +1435,7 @@ function cancelarEdicao(){
 }
 
 async function salvarEdicao(index){
+    exigirEstadoPronto();
     const descricao = document.getElementById("editDescricao").value.trim();
     const cartao = document.getElementById("editCartao").value;
     const categoria = document.getElementById("editCategoria").value;
@@ -1428,6 +1483,7 @@ async function salvarEdicao(index){
 }
 
 async function remover(index){
+    exigirEstadoPronto();
     if(!dados[anoAtual] || !dados[anoAtual][mesAtual]) return;
 
     const referenciasSerie = obterSerieLancamento(anoAtual, mesAtual, index);
@@ -1464,20 +1520,10 @@ async function remover(index){
 }
 
 async function inicializarApp(){
-    try {
-        garantirUIInicializada();
-        await carregarEstadoInicial();
-        sincronizarListasComDados();
-        atualizarTela();
-        estadoPronto = true;
-    } catch (error) {
-        console.error("Erro ao carregar dados do Firebase:", error);
-        garantirUIInicializada();
-        sincronizarListasComDados();
-        atualizarTela();
-        estadoPronto = true;
-        window.alert("Não foi possível carregar os dados do Firebase. Verifique autenticação, regras do banco e tente novamente.");
-    }
+    garantirUIInicializada();
+    estadoPronto = false;
+    mostrarStatusSincronizacao("Carregando seus dados do Firebase…");
+    assinarDadosUsuario();
 }
 
 function garantirUIInicializada(){
@@ -1500,16 +1546,41 @@ function assinarDadosUsuario(){
         unsubscribeDados();
     }
 
+    const sessao = ++sessaoDados;
     const refDados = db.ref(getCaminhoDadosUsuario());
+    const timer = window.setTimeout(() => {
+        if(sessao !== sessaoDados || estadoPronto) return;
+        mostrarStatusSincronizacao("O Firebase ainda não respondeu. Verifique a conexão e tente recarregar os dados.", true);
+    }, 15000);
     const listener = (snapshot) => {
-        if(!estadoPronto) return;
-
-        aplicarEstadoRemoto(snapshot.val());
-        atualizarTela();
+        if(sessao !== sessaoDados) return;
+        window.clearTimeout(timer);
+        try {
+            const estado = snapshot.val();
+            if(estado !== null && (typeof estado !== "object" || Array.isArray(estado))){
+                throw new Error("Formato de dados inválido no Firebase.");
+            }
+            aplicarEstadoRemoto(estado);
+            atualizarTela();
+            estadoPronto = true;
+            mostrarStatusSincronizacao(mensagemDadosCarregados());
+        } catch(error){
+            falha(error);
+        }
+    };
+    const falha = (error) => {
+        if(sessao !== sessaoDados) return;
+        window.clearTimeout(timer);
+        estadoPronto = false;
+        console.error("Erro ao sincronizar dados do Firebase:", error);
+        mostrarStatusSincronizacao(`Não foi possível carregar os dados (${error.code || error.message}). Confira a conexão e as permissões da conta no Firebase.`, true);
     };
 
-    refDados.on("value", listener);
-    unsubscribeDados = () => refDados.off("value", listener);
+    refDados.on("value", listener, falha);
+    unsubscribeDados = () => {
+        window.clearTimeout(timer);
+        refDados.off("value", listener);
+    };
 }
 
 async function autenticarComGoogle(){
@@ -1574,14 +1645,24 @@ async function processarUsuarioAutenticado(user){
     autenticacaoManualPendente = false;
     limparRedirectEmAndamento();
     usuarioLogado = user;
+    estadoPronto = false;
+    dados = {};
+    cartoes = [];
+    categorias = [];
+    editandoIndex = null;
+    lancamentosSelecionados.clear();
     atualizarVisibilidadeTelas();
+    atualizarSaudacaoUsuario();
     await inicializarApp();
-    assinarDadosUsuario();
 }
 
 function processarUsuarioDeslogado(){
+    sessaoDados++;
     usuarioLogado = null;
     estadoPronto = false;
+    dados = {};
+    cartoes = [];
+    categorias = [];
 
     if(typeof unsubscribeDados === "function"){
         unsubscribeDados();
